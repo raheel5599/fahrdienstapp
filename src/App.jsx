@@ -127,26 +127,19 @@ function App() {
   );
 
   const updateTripStatus = (tripId, status) => {
-    let completedDriver = null;
-    setTrips(prev => prev.map(t => {
-      if (t.id !== tripId) return t;
-      if (status === 'abgeschlossen') completedDriver = t.driver;
-      return {
-        ...t,
-        status,
-        audit: [...(t.audit || []), { status, at: new Date().toISOString() }]
-      };
-    }));
+    const trip = trips.find(t => t.id === tripId);
+    setTrips(prev => prev.map(t => t.id === tripId ? {
+      ...t,
+      status,
+      audit: [...(t.audit || []), { status, at: new Date().toISOString() }]
+    } : t));
 
-    if (completedDriver) {
-      setDrivers(prev => prev.map(d => d.name === completedDriver ? { ...d, status: 'frei' } : d));
-    } else {
-      const trip = trips.find(t => t.id === tripId);
-      if (trip?.driver) {
-        setDrivers(prev => prev.map(d =>
-          d.name === trip.driver ? { ...d, status: status === 'geplant' ? 'frei' : status } : d
-        ));
-      }
+    if (trip?.driver) {
+      setDrivers(prev => prev.map(d =>
+        d.name === trip.driver
+          ? { ...d, status: status === 'abgeschlossen' || status === 'geplant' ? 'frei' : status }
+          : d
+      ));
     }
   };
 
