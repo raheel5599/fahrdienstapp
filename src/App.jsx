@@ -49,7 +49,7 @@ function StatusPill({ status }) {
 }
 
 function App() {
-  const { session, login, logout, can } = useAuthSession();
+  const { session, loading, login, logout, can } = useAuthSession();
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
@@ -67,6 +67,10 @@ function App() {
   const currentDriverTrip = trips.find(t =>
     t.driver === driverName && [TRIP_STATUS.PLANNED,TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)
   );
+
+  if (loading) {
+    return <div className="auth-loading"><img src={LOGO} alt={APP_CONFIG.name}/><span>Zentrale Daten werden geladen …</span></div>;
+  }
 
   if (!session) {
     return <LoginScreen onLogin={login} />;
