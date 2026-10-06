@@ -177,7 +177,7 @@ export function useAuthSession() {
     if (!appUser) {
       await supabase.auth.signOut();
       setLoading(false);
-      return { ok: false, message: 'Für diesen Zugang ist TARIQ Fahrdienst nicht freigeschaltet.' };
+      return { ok: false, message: `Für diesen Zugang ist ${APP_CONFIG.name} nicht freigeschaltet.` };
     }
 
     setSession({
