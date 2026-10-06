@@ -2,60 +2,22 @@ import React, { useMemo, useState } from 'react';
 import {
   Activity, BadgeEuro, Bell, BookOpenCheck, Building2, CalendarDays, Car,
   ChartNoAxesCombined, CheckCircle2, ChevronDown, CircleUserRound, Clock3,
-  CreditCard, FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
+  FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
   Menu, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
   ShieldCheck, Stethoscope, UserRoundCheck, UsersRound, WalletCards, X
 } from 'lucide-react';
+import { APP_CONFIG } from './config/app.js';
+import { initialTrips, driversSeed } from './data/demo.js';
+import {
+  DRIVER_WORKFLOW,
+  STATUS_LABELS,
+  TRIP_STATUS,
+  canTransition,
+  createAuditEntry
+} from './domain/trips.js';
+import { usePersistentState } from './lib/storage.js';
 
-const LOGO = 'https://tariq-fahrdienst.de/assets/fahrdienst/logo-tariq-krankenfahrdienst-header.png?v=20260929-1715';
-
-const initialTrips = [
-  {
-    id: 'F-1024', time: '08:00', patient: 'Müller, Anna', type: 'Dialyse',
-    from: 'Florstadt, Altenstädter Str. 8', to: 'Dialysezentrum Friedberg',
-    driver: 'Ahmad', vehicle: 'FB-TT 5599', status: 'abgeschlossen',
-    wheelchair: true
-  },
-  {
-    id: 'F-1025', time: '09:30', patient: 'Schmidt, Karl', type: 'Chemotherapie',
-    from: 'Florstadt, Lindenstraße 12', to: 'St. Johannes Hospital Frankfurt',
-    driver: 'Imran', vehicle: 'FB-VD 5599', status: 'in_fahrt',
-    wheelchair: false
-  },
-  {
-    id: 'F-1026', time: '11:00', patient: 'Yilmaz, Mehmet', type: 'Arztfahrt',
-    from: 'Reichelsheim, Hauptstraße 31', to: 'Praxis Dr. Weber, Bad Nauheim',
-    driver: 'Bilal', vehicle: 'FB-CM 5599', status: 'auf_dem_weg',
-    wheelchair: false
-  },
-  {
-    id: 'F-1027', time: '13:15', patient: 'Becker, Lisa', type: 'Reha',
-    from: 'Friedberg, Kaiserstraße 47', to: 'MediClin Bad Orb',
-    driver: 'Hamza', vehicle: 'FB-TT 5600', status: 'geplant',
-    wheelchair: true
-  },
-  {
-    id: 'F-1028', time: '15:00', patient: 'Schneider, Thomas', type: 'Krankenhaus',
-    from: 'Bad Nauheim, Parkstraße 3', to: 'Knappschaftsklinik',
-    driver: '', vehicle: '', status: 'offen',
-    wheelchair: false
-  },
-  {
-    id: 'F-1029', time: '16:30', patient: 'Özdemir, Fatma', type: 'Dialyse',
-    from: 'Florstadt, Am Mühlbach 18', to: 'Dialysezentrum Bad Vilbel',
-    driver: 'Ali', vehicle: 'FB-CM 5599', status: 'geplant',
-    wheelchair: false
-  }
-];
-
-const driversSeed = [
-  { name: 'Ahmad', vehicle: 'FB-TT 5599', status: 'frei' },
-  { name: 'Imran', vehicle: 'FB-VD 5599', status: 'in_fahrt' },
-  { name: 'Bilal', vehicle: 'FB-CM 5599', status: 'auf_dem_weg' },
-  { name: 'Hamza', vehicle: 'FB-TT 5600', status: 'frei' },
-  { name: 'Ali', vehicle: 'FB-CM 5599', status: 'frei' },
-  { name: 'Yusuf', vehicle: 'FB-XX 5601', status: 'frei' }
-];
+const LOGO = APP_CONFIG.logoUrl;
 
 const nav = [
   ['dashboard', 'Dashboard', Home],
@@ -74,33 +36,8 @@ const nav = [
   ['einstellungen', 'Einstellungen', Settings]
 ];
 
-const statusLabel = {
-  offen: 'Offen',
-  geplant: 'Geplant',
-  auf_dem_weg: 'Auf dem Weg',
-  angekommen: 'Angekommen',
-  in_fahrt: 'In Fahrt',
-  abgeschlossen: 'Abgeschlossen'
-};
-
-const statusOrder = ['geplant', 'auf_dem_weg', 'angekommen', 'in_fahrt', 'abgeschlossen'];
-
-function usePersistentState(key, fallback) {
-  const [value, setValue] = useState(() => {
-    try {
-      const stored = window.localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : fallback;
-    } catch {
-      return fallback;
-    }
-  });
-  const setPersisted = (next) => {
-    const resolved = typeof next === 'function' ? next(value) : next;
-    setValue(resolved);
-    window.localStorage.setItem(key, JSON.stringify(resolved));
-  };
-  return [value, setPersisted];
-}
+const statusLabel = STATUS_LABELS;
+const statusOrder = DRIVER_WORKFLOW;
 
 function StatusPill({ status }) {
   return <span className={`status-pill status-${status}`}><span className="dot" />{statusLabel[status] || status}</span>;
@@ -111,33 +48,40 @@ function App() {
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [trips, setTrips] = usePersistentState('tariq-fahrdienst-trips-v1', initialTrips);
-  const [drivers, setDrivers] = usePersistentState('tariq-fahrdienst-drivers-v1', driversSeed);
+  const [trips, setTrips] = usePersistentState('trips', initialTrips);
+  const [drivers, setDrivers] = usePersistentState('drivers', driversSeed);
   const [driverName, setDriverName] = useState('Imran');
 
   const metrics = useMemo(() => ({
     today: trips.length,
-    moving: trips.filter(t => ['auf_dem_weg','angekommen','in_fahrt'].includes(t.status)).length,
-    done: trips.filter(t => t.status === 'abgeschlossen').length,
-    open: trips.filter(t => t.status === 'offen').length
+    moving: trips.filter(t => [TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)).length,
+    done: trips.filter(t => t.status === TRIP_STATUS.COMPLETED).length,
+    open: trips.filter(t => t.status === TRIP_STATUS.OPEN).length
   }), [trips]);
 
   const currentDriverTrip = trips.find(t =>
-    t.driver === driverName && ['geplant','auf_dem_weg','angekommen','in_fahrt'].includes(t.status)
+    t.driver === driverName && [TRIP_STATUS.PLANNED,TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)
   );
 
   const updateTripStatus = (tripId, status) => {
     const trip = trips.find(t => t.id === tripId);
+    if (!trip || !canTransition(trip.status, status)) return;
+
+    const driver = drivers.find(d => d.name === trip.driver);
     setTrips(prev => prev.map(t => t.id === tripId ? {
       ...t,
       status,
-      audit: [...(t.audit || []), { status, at: new Date().toISOString() }]
+      audit: [...(t.audit || []), createAuditEntry(status, {
+        id: driver?.id,
+        name: driver?.name,
+        role: 'driver'
+      })]
     } : t));
 
-    if (trip?.driver) {
+    if (trip.driver) {
       setDrivers(prev => prev.map(d =>
         d.name === trip.driver
-          ? { ...d, status: status === 'abgeschlossen' || status === 'geplant' ? 'frei' : status }
+          ? { ...d, status: status === TRIP_STATUS.COMPLETED ? 'frei' : status }
           : d
       ));
     }
@@ -147,8 +91,12 @@ function App() {
     const driver = drivers.find(d => d.name === driverNameValue);
     if (!driver) return;
     setTrips(prev => prev.map(t => t.id === tripId ? {
-      ...t, driver: driver.name, vehicle: driver.vehicle, status: 'geplant',
-      audit: [...(t.audit || []), { status: 'zugewiesen', at: new Date().toISOString(), driver: driver.name }]
+      ...t, driver: driver.name, vehicle: driver.vehicle, status: TRIP_STATUS.PLANNED,
+      audit: [...(t.audit || []), createAuditEntry('zugewiesen', {
+        id: driver.id,
+        name: driver.name,
+        role: 'office'
+      }, { driver: driver.name, vehicle: driver.vehicle })]
     } : t));
   };
 
