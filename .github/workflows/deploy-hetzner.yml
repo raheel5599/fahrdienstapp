@@ -1,0 +1,45 @@
+name: Hetzner deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tariq-fahrdienst-app-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH vorbereiten
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.HETZNER_HOST }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: App übertragen und starten
+        env:
+          SSH_HOST: ${{ secrets.HETZNER_HOST }}
+        run: |
+          tar --exclude=.git -czf /tmp/tariq-fahrdienst-app.tar.gz .
+          scp -i ~/.ssh/deploy_key /tmp/tariq-fahrdienst-app.tar.gz "fpadmin@${SSH_HOST}:/tmp/tariq-fahrdienst-app.tar.gz"
+          ssh -i ~/.ssh/deploy_key "fpadmin@${SSH_HOST}" '
+            set -e
+            mkdir -p /home/fpadmin/sites/tariq-fahrdienst-app
+            find /home/fpadmin/sites/tariq-fahrdienst-app -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            tar -xzf /tmp/tariq-fahrdienst-app.tar.gz -C /home/fpadmin/sites/tariq-fahrdienst-app
+            docker network inspect fahrschulpilot_web >/dev/null 2>&1 || docker network create fahrschulpilot_web
+            cd /home/fpadmin/sites/tariq-fahrdienst-app
+            docker compose -f compose.production.yml up -d --build --remove-orphans
+            docker ps --filter name=tariq-fahrdienst-app
+          '
