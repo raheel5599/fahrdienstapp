@@ -4,9 +4,7 @@ import { BACKEND_CONFIG, isRemoteBackendConfigured } from '../config/backend.js'
 import { hasPermission } from './permissions.js';
 import {
   authenticateDirectoryUser,
-  ensureUserDirectory,
-  getLocalSessionUser,
-  clearLocalSessionUser
+  ensureUserDirectory
 } from './userDirectory.js';
 import { supabase } from '../lib/supabase.js';
 
@@ -194,7 +192,6 @@ export function useAuthSession() {
 
   const logout = async () => {
     if (DEMO_AUTH_ENABLED) {
-      clearLocalSessionUser();
       saveLocalSession(null);
       setSession(null);
       return;
