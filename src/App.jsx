@@ -1,0 +1,517 @@
+import React, { useMemo, useState } from 'react';
+import {
+  Activity, BadgeEuro, Bell, BookOpenCheck, Building2, CalendarDays, Car,
+  ChartNoAxesCombined, CheckCircle2, ChevronDown, CircleUserRound, Clock3,
+  CreditCard, FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
+  Menu, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
+  ShieldCheck, Stethoscope, UserRoundCheck, UsersRound, WalletCards, X
+} from 'lucide-react';
+
+const LOGO = 'https://tariq-fahrdienst.de/assets/fahrdienst/logo-tariq-krankenfahrdienst-header.png?v=20260929-1715';
+
+const initialTrips = [
+  {
+    id: 'F-1024', time: '08:00', patient: 'Müller, Anna', type: 'Dialyse',
+    from: 'Florstadt, Altenstädter Str. 8', to: 'Dialysezentrum Friedberg',
+    driver: 'Ahmad', vehicle: 'FB-TT 5599', status: 'abgeschlossen',
+    wheelchair: true
+  },
+  {
+    id: 'F-1025', time: '09:30', patient: 'Schmidt, Karl', type: 'Chemotherapie',
+    from: 'Florstadt, Lindenstraße 12', to: 'St. Johannes Hospital Frankfurt',
+    driver: 'Imran', vehicle: 'FB-VD 5599', status: 'in_fahrt',
+    wheelchair: false
+  },
+  {
+    id: 'F-1026', time: '11:00', patient: 'Yilmaz, Mehmet', type: 'Arztfahrt',
+    from: 'Reichelsheim, Hauptstraße 31', to: 'Praxis Dr. Weber, Bad Nauheim',
+    driver: 'Bilal', vehicle: 'FB-CM 5599', status: 'auf_dem_weg',
+    wheelchair: false
+  },
+  {
+    id: 'F-1027', time: '13:15', patient: 'Becker, Lisa', type: 'Reha',
+    from: 'Friedberg, Kaiserstraße 47', to: 'MediClin Bad Orb',
+    driver: 'Hamza', vehicle: 'FB-TT 5600', status: 'geplant',
+    wheelchair: true
+  },
+  {
+    id: 'F-1028', time: '15:00', patient: 'Schneider, Thomas', type: 'Krankenhaus',
+    from: 'Bad Nauheim, Parkstraße 3', to: 'Knappschaftsklinik',
+    driver: '', vehicle: '', status: 'offen',
+    wheelchair: false
+  },
+  {
+    id: 'F-1029', time: '16:30', patient: 'Özdemir, Fatma', type: 'Dialyse',
+    from: 'Florstadt, Am Mühlbach 18', to: 'Dialysezentrum Bad Vilbel',
+    driver: 'Ali', vehicle: 'FB-CM 5599', status: 'geplant',
+    wheelchair: false
+  }
+];
+
+const driversSeed = [
+  { name: 'Ahmad', vehicle: 'FB-TT 5599', status: 'frei' },
+  { name: 'Imran', vehicle: 'FB-VD 5599', status: 'in_fahrt' },
+  { name: 'Bilal', vehicle: 'FB-CM 5599', status: 'auf_dem_weg' },
+  { name: 'Hamza', vehicle: 'FB-TT 5600', status: 'frei' },
+  { name: 'Ali', vehicle: 'FB-CM 5599', status: 'frei' },
+  { name: 'Yusuf', vehicle: 'FB-XX 5601', status: 'frei' }
+];
+
+const nav = [
+  ['dashboard', 'Dashboard', Home],
+  ['kunden', 'Kundenverwaltung', UsersRound],
+  ['disposition', 'Fahrten / Disposition', Route],
+  ['termine', 'Terminverwaltung', CalendarDays],
+  ['kassen', 'Kassen & Verträge', ShieldCheck],
+  ['abrechnung', 'Abrechnungen', BadgeEuro],
+  ['rechnungen', 'Rechnungen', ReceiptText],
+  ['fahrzeuge', 'Fahrzeugverwaltung', Car],
+  ['fahrer', 'Fahrer / Personal', CircleUserRound],
+  ['buchhaltung', 'Buchhaltung', Landmark],
+  ['berichte', 'Berichte & Statistiken', ChartNoAxesCombined],
+  ['dokumente', 'Dokumente', FileCheck2],
+  ['nachrichten', 'Nachrichten', MessageSquareText],
+  ['einstellungen', 'Einstellungen', Settings]
+];
+
+const statusLabel = {
+  offen: 'Offen',
+  geplant: 'Geplant',
+  auf_dem_weg: 'Auf dem Weg',
+  angekommen: 'Angekommen',
+  in_fahrt: 'In Fahrt',
+  abgeschlossen: 'Abgeschlossen'
+};
+
+const statusOrder = ['geplant', 'auf_dem_weg', 'angekommen', 'in_fahrt', 'abgeschlossen'];
+
+function usePersistentState(key, fallback) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+  const setPersisted = (next) => {
+    const resolved = typeof next === 'function' ? next(value) : next;
+    setValue(resolved);
+    window.localStorage.setItem(key, JSON.stringify(resolved));
+  };
+  return [value, setPersisted];
+}
+
+function StatusPill({ status }) {
+  return <span className={`status-pill status-${status}`}><span className="dot" />{statusLabel[status] || status}</span>;
+}
+
+function App() {
+  const [role, setRole] = useState('office');
+  const [active, setActive] = useState('dashboard');
+  const [mobileNav, setMobileNav] = useState(false);
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [trips, setTrips] = usePersistentState('tariq-fahrdienst-trips-v1', initialTrips);
+  const [drivers, setDrivers] = usePersistentState('tariq-fahrdienst-drivers-v1', driversSeed);
+  const [driverName, setDriverName] = useState('Imran');
+
+  const metrics = useMemo(() => ({
+    today: trips.length,
+    moving: trips.filter(t => ['auf_dem_weg','angekommen','in_fahrt'].includes(t.status)).length,
+    done: trips.filter(t => t.status === 'abgeschlossen').length,
+    open: trips.filter(t => t.status === 'offen').length
+  }), [trips]);
+
+  const currentDriverTrip = trips.find(t =>
+    t.driver === driverName && ['geplant','auf_dem_weg','angekommen','in_fahrt'].includes(t.status)
+  );
+
+  const updateTripStatus = (tripId, status) => {
+    let completedDriver = null;
+    setTrips(prev => prev.map(t => {
+      if (t.id !== tripId) return t;
+      if (status === 'abgeschlossen') completedDriver = t.driver;
+      return {
+        ...t,
+        status,
+        audit: [...(t.audit || []), { status, at: new Date().toISOString() }]
+      };
+    }));
+
+    if (completedDriver) {
+      setDrivers(prev => prev.map(d => d.name === completedDriver ? { ...d, status: 'frei' } : d));
+    } else {
+      const trip = trips.find(t => t.id === tripId);
+      if (trip?.driver) {
+        setDrivers(prev => prev.map(d =>
+          d.name === trip.driver ? { ...d, status: status === 'geplant' ? 'frei' : status } : d
+        ));
+      }
+    }
+  };
+
+  const assignTrip = (tripId, driverNameValue) => {
+    const driver = drivers.find(d => d.name === driverNameValue);
+    if (!driver) return;
+    setTrips(prev => prev.map(t => t.id === tripId ? {
+      ...t, driver: driver.name, vehicle: driver.vehicle, status: 'geplant',
+      audit: [...(t.audit || []), { status: 'zugewiesen', at: new Date().toISOString(), driver: driver.name }]
+    } : t));
+  };
+
+  if (role === 'driver') {
+    return (
+      <DriverApp
+        trips={trips}
+        drivers={drivers}
+        driverName={driverName}
+        setDriverName={setDriverName}
+        currentTrip={currentDriverTrip}
+        onStatus={updateTripStatus}
+        onBack={() => setRole('office')}
+      />
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${mobileNav ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <img src={LOGO} alt="TARIQ Krankenfahrdienst" />
+          <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Menü schließen"><X /></button>
+        </div>
+        <nav>
+          {nav.map(([id, label, Icon]) => (
+            <button key={id} className={active === id ? 'active' : ''} onClick={() => { setActive(id); setMobileNav(false); }}>
+              <Icon size={19}/><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <div><span className="online-dot" /> System online</div>
+          <small>app.tariq-fahrdienst.de</small>
+        </div>
+      </aside>
+
+      {mobileNav && <button className="backdrop" onClick={() => setMobileNav(false)} aria-label="Menü schließen" />}
+
+      <main className="main">
+        <header className="topbar">
+          <div className="topbar-left">
+            <button className="icon-button menu-button" onClick={() => setMobileNav(true)}><Menu /></button>
+            <div className="searchbox"><Search size={18}/><input placeholder="Suche Kunden, Fahrten, Rechnungen ..." /></div>
+          </div>
+          <div className="topbar-actions">
+            <button className="icon-button bell"><Bell /><span>3</span></button>
+            <button className="role-button" onClick={() => setRole('driver')}>
+              <CircleUserRound size={26}/>
+              <span><strong>Tariq Admin</strong><small>Büro / Verwaltung</small></span>
+              <ChevronDown size={16}/>
+            </button>
+          </div>
+        </header>
+
+        <section className="page">
+          <div className="page-heading">
+            <div>
+              <p className="eyebrow">TARIQ KRANKENFAHRDIENST</p>
+              <h1>{active === 'dashboard' ? 'Übersicht & Live-Disposition' : nav.find(n => n[0] === active)?.[1]}</h1>
+              <p>Alle wichtigen Abläufe zentral steuern, dokumentieren und abrechnen.</p>
+            </div>
+            <div className="heading-actions">
+              <button className="secondary-button" onClick={() => setRole('driver')}><CircleUserRound size={18}/> Fahrer Web App</button>
+              <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>
+            </div>
+          </div>
+
+          {active === 'dashboard' || active === 'disposition' ? (
+            <>
+              <div className="metrics">
+                <Metric icon={CalendarDays} label="Heute geplant" value={metrics.today} note="Fahrten gesamt" />
+                <Metric icon={Car} label="Unterwegs" value={metrics.moving} note="Live aktiv" />
+                <Metric icon={CheckCircle2} label="Abgeschlossen" value={metrics.done} note="Heute fertig" />
+                <Metric icon={Clock3} label="Offen" value={metrics.open} note="Wartet auf Fahrer" warning={metrics.open > 0} />
+              </div>
+
+              <div className="dashboard-grid">
+                <section className="panel trips-panel">
+                  <PanelTitle icon={Route} title="Heute – Live-Disposition" right={<button className="text-button">Alle Fahrten</button>} />
+                  <div className="trip-list">
+                    {trips.map(t => (
+                      <div className="trip-row" key={t.id}>
+                        <div className="time">{t.time}</div>
+                        <div className="trip-main">
+                          <div className="patient-line">
+                            <strong>{t.patient}</strong>
+                            {t.wheelchair && <span className="mini-badge">Rollstuhl</span>}
+                          </div>
+                          <span>{t.type} · {t.to}</span>
+                        </div>
+                        <div className="trip-assignment">
+                          <strong>{t.driver || 'Noch offen'}</strong>
+                          <span>{t.vehicle || 'Kein Fahrzeug'}</span>
+                        </div>
+                        <StatusPill status={t.status} />
+                        <button className="row-action" onClick={() => setDispatchOpen(t.id)}>Bearbeiten</button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel driver-panel">
+                  <PanelTitle icon={UserRoundCheck} title="Fahrerstatus" right={<span className="live-label"><span/> LIVE</span>} />
+                  <div className="driver-cards">
+                    {drivers.map(d => (
+                      <div className="driver-card" key={d.name}>
+                        <div className="driver-avatar">{d.name.slice(0,1)}</div>
+                        <div><strong>{d.name}</strong><span>{d.vehicle}</span></div>
+                        <StatusPill status={d.status === 'frei' ? 'abgeschlossen' : d.status} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel map-panel">
+                  <PanelTitle icon={MapPinned} title="Fahrzeuge Live" right={<button className="text-button">Karte öffnen</button>} />
+                  <div className="map-placeholder">
+                    <div className="map-grid" />
+                    <div className="map-city city-one">FRANKFURT</div>
+                    <div className="map-city city-two">FRIEDBERG</div>
+                    <div className="map-city city-three">FLORSTADT</div>
+                    {drivers.slice(0,5).map((d, i) => (
+                      <div key={d.name} className={`vehicle-pin pin-${i+1}`}><Car size={16}/><span>{d.vehicle}</span></div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel quick-panel">
+                  <PanelTitle icon={Gauge} title="Schnellaktionen" />
+                  <div className="quick-grid">
+                    <Quick icon={UsersRound} text="Neuer Kunde" />
+                    <Quick icon={CalendarDays} text="Neue Fahrt" onClick={() => setDispatchOpen(true)} />
+                    <Quick icon={ReceiptText} text="Rechnung erstellen" />
+                    <Quick icon={BadgeEuro} text="Abrechnung starten" />
+                    <Quick icon={Car} text="Fahrzeug buchen" />
+                    <Quick icon={ChartNoAxesCombined} text="Bericht erstellen" />
+                  </div>
+                </section>
+              </div>
+
+              <div className="module-strip">
+                <Feature icon={Stethoscope} title="Stammkunden" text="Dialyse, Reha, Serienfahrten" />
+                <Feature icon={WalletCards} title="Kassen & Verträge" text="AOK, TK, BARMER, DAK u. a." />
+                <Feature icon={FileText} title="Verordnungen" text="Dokumente direkt zur Fahrt" />
+                <Feature icon={BookOpenCheck} title="Buchhaltung" text="Belege, Rechnungen, Auswertung" />
+                <Feature icon={Activity} title="Lückenlose Historie" text="Fahrer, Fahrzeug, Uhrzeiten, Status" />
+              </div>
+            </>
+          ) : (
+            <ModulePlaceholder active={active} onNewTrip={() => setDispatchOpen(true)} />
+          )}
+        </section>
+      </main>
+
+      {dispatchOpen && (
+        <DispatchModal
+          trips={trips}
+          drivers={drivers}
+          tripId={dispatchOpen === true ? null : dispatchOpen}
+          onClose={() => setDispatchOpen(false)}
+          onAssign={assignTrip}
+          onCreate={(trip) => {
+            setTrips(prev => [...prev, trip]);
+            setDispatchOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Metric({ icon: Icon, label, value, note, warning }) {
+  return <div className="metric-card"><div className={`metric-icon ${warning ? 'warning' : ''}`}><Icon/></div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></div>;
+}
+
+function PanelTitle({ icon: Icon, title, right }) {
+  return <div className="panel-title"><div><Icon size={19}/><strong>{title}</strong></div>{right}</div>;
+}
+
+function Quick({ icon: Icon, text, onClick }) {
+  return <button className="quick-action" onClick={onClick}><Icon size={20}/><span>{text}</span></button>;
+}
+
+function Feature({ icon: Icon, title, text }) {
+  return <div className="feature"><Icon/><div><strong>{title}</strong><span>{text}</span></div></div>;
+}
+
+function ModulePlaceholder({ active, onNewTrip }) {
+  const content = {
+    kunden: ['Kundenverwaltung', 'Patienten, Stammkunden, Angehörige, Versicherungsdaten und Fahrt-Historie.'],
+    termine: ['Terminverwaltung', 'Einmalige und wiederkehrende Fahrten planen, Serienfahrten verwalten und Konflikte erkennen.'],
+    kassen: ['Kassen & Verträge', 'Verträge, Preislisten, Pauschalen und Abrechnungsregeln je Krankenkasse hinterlegen.'],
+    abrechnung: ['Abrechnungen', 'Krankenfahrten sammeln, prüfen und als Abrechnungsläufe an die Kassen übergeben.'],
+    rechnungen: ['Rechnungen', 'Privatfahrten, Zuzahlungen und Zusatzleistungen abrechnen.'],
+    fahrzeuge: ['Fahrzeugverwaltung', 'Fahrzeuge, Kilometerstände, Wartung, TÜV, Schäden und Verfügbarkeit.'],
+    fahrer: ['Fahrer & Personal', 'Fahrer, Schichten, Dokumente, Führerscheine und Einsatzzeiten verwalten.'],
+    buchhaltung: ['Buchhaltung', 'Einnahmen, Ausgaben, Belege, offene Posten und Monatsauswertungen.'],
+    berichte: ['Berichte & Statistiken', 'Umsatz, Auslastung, Kilometer, Kassen und Fahrerleistung auswerten.'],
+    dokumente: ['Dokumentenverwaltung', 'Verordnungen, Genehmigungen, Verträge und Nachweise zentral ablegen.'],
+    nachrichten: ['Nachrichten & Kommunikation', 'Büro, Fahrer und Verwaltung direkt innerhalb der Plattform verbinden.'],
+    einstellungen: ['Einstellungen', 'Unternehmen, Rollen, Berechtigungen, Benachrichtigungen und Schnittstellen konfigurieren.']
+  }[active] || ['Modul', 'Dieses Modul wird als nächstes ausgebaut.'];
+
+  return (
+    <section className="panel placeholder-panel">
+      <div className="placeholder-icon"><Building2 /></div>
+      <h2>{content[0]}</h2>
+      <p>{content[1]}</p>
+      <div className="placeholder-actions">
+        <button className="primary-button" onClick={onNewTrip}><Plus size={18}/> Neue Fahrt anlegen</button>
+        <button className="secondary-button"><Settings size={18}/> Modul konfigurieren</button>
+      </div>
+    </section>
+  );
+}
+
+function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) {
+  const existing = trips.find(t => t.id === tripId);
+  const [driver, setDriver] = useState(existing?.driver || '');
+  const [patient, setPatient] = useState(existing?.patient || '');
+  const [time, setTime] = useState(existing?.time || '12:00');
+  const [from, setFrom] = useState(existing?.from || '');
+  const [to, setTo] = useState(existing?.to || '');
+  const [type, setType] = useState(existing?.type || 'Arztfahrt');
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (existing) {
+      if (driver) onAssign(existing.id, driver);
+      onClose();
+      return;
+    }
+    const selectedDriver = drivers.find(d => d.name === driver);
+    onCreate({
+      id: 'F-' + String(Date.now()).slice(-5),
+      time, patient, from, to, type,
+      driver: selectedDriver?.name || '',
+      vehicle: selectedDriver?.vehicle || '',
+      status: selectedDriver ? 'geplant' : 'offen',
+      wheelchair: false,
+      audit: [{ status: selectedDriver ? 'zugewiesen' : 'angelegt', at: new Date().toISOString(), driver: selectedDriver?.name || '' }]
+    });
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} aria-label="Schließen" />
+      <form className="modal-card" onSubmit={submit}>
+        <div className="modal-head">
+          <div><p className="eyebrow">LIVE-DISPOSITION</p><h2>{existing ? 'Fahrt zuweisen' : 'Neue Fahrt anlegen'}</h2></div>
+          <button type="button" className="icon-button" onClick={onClose}><X/></button>
+        </div>
+        <div className="form-grid">
+          <label><span>Patient</span><input value={patient} onChange={e => setPatient(e.target.value)} required disabled={!!existing}/></label>
+          <label><span>Uhrzeit</span><input type="time" value={time} onChange={e => setTime(e.target.value)} required disabled={!!existing}/></label>
+          <label className="wide"><span>Abholadresse</span><input value={from} onChange={e => setFrom(e.target.value)} required disabled={!!existing}/></label>
+          <label className="wide"><span>Ziel</span><input value={to} onChange={e => setTo(e.target.value)} required disabled={!!existing}/></label>
+          <label><span>Fahrtart</span><select value={type} onChange={e => setType(e.target.value)} disabled={!!existing}><option>Arztfahrt</option><option>Dialyse</option><option>Chemotherapie</option><option>Reha</option><option>Krankenhaus</option></select></label>
+          <label><span>Fahrer & Fahrzeug</span><select value={driver} onChange={e => setDriver(e.target.value)}><option value="">Noch nicht zuweisen</option>{drivers.map(d => <option key={d.name} value={d.name}>{d.name} · {d.vehicle} · {d.status === 'frei' ? 'frei' : statusLabel[d.status]}</option>)}</select></label>
+        </div>
+        <div className="modal-summary">
+          <ShieldCheck size={18}/>
+          <span>Nach Zuweisung erscheint der Auftrag sofort in der Fahrer Web App. Statusänderungen werden mit Zeitstempel dokumentiert.</span>
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>Abbrechen</button>
+          <button className="primary-button">{existing ? 'Fahrt zuweisen' : 'Fahrt speichern'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DriverApp({ trips, drivers, driverName, setDriverName, currentTrip, onStatus, onBack }) {
+  const myTrips = trips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
+  const progressIndex = currentTrip ? statusOrder.indexOf(currentTrip.status) : -1;
+
+  const actions = [
+    ['auf_dem_weg', 'Auf dem Weg', Route],
+    ['angekommen', 'Angekommen', MapPinned],
+    ['in_fahrt', 'Fahrt starten', Car],
+    ['abgeschlossen', 'Fahrt beenden', CheckCircle2]
+  ];
+
+  return (
+    <div className="driver-app">
+      <header className="driver-topbar">
+        <img src={LOGO} alt="TARIQ Krankenfahrdienst" />
+        <div className="driver-online"><span className="online-dot"/> Online · verfügbar</div>
+        <div className="driver-select">
+          <select value={driverName} onChange={e => setDriverName(e.target.value)}>
+            {drivers.map(d => <option key={d.name}>{d.name}</option>)}
+          </select>
+          <button className="secondary-button" onClick={onBack}>Büroansicht</button>
+        </div>
+      </header>
+
+      <main className="driver-content">
+        <div className="driver-page-heading">
+          <div><p className="eyebrow">FAHRER WEB APP</p><h1>Meine Aufträge</h1><p>Aufträge live vom Büro erhalten und Fahrtstatus mit einem Klick melden.</p></div>
+          <div className="driver-count">{myTrips.length}<span>offene Aufträge</span></div>
+        </div>
+
+        {currentTrip ? (
+          <section className="driver-current">
+            <div className="current-badge">AKTUELLE FAHRT · {currentTrip.time}</div>
+            <div className="driver-trip-card">
+              <div className="driver-trip-head">
+                <div><h2>{currentTrip.patient}</h2><p>{currentTrip.type} · Auftrag {currentTrip.id}</p></div>
+                <StatusPill status={currentTrip.status}/>
+              </div>
+              <div className="address-route">
+                <div className="route-point"><span>A</span><div><small>Abholung</small><strong>{currentTrip.from}</strong></div></div>
+                <div className="route-line"/>
+                <div className="route-point destination"><span>Z</span><div><small>Ziel</small><strong>{currentTrip.to}</strong></div></div>
+              </div>
+
+              <div className="progress-track">
+                {statusOrder.map((s, i) => <div key={s} className={i <= progressIndex ? 'done' : ''}><span/>{statusLabel[s]}</div>)}
+              </div>
+
+              <div className="driver-action-grid">
+                {actions.map(([status, label, Icon], index) => {
+                  const targetIndex = statusOrder.indexOf(status);
+                  const enabled = targetIndex === progressIndex + 1 || (status === 'auf_dem_weg' && progressIndex === 0);
+                  return <button key={status} disabled={!enabled} className={`driver-action action-${status}`} onClick={() => onStatus(currentTrip.id, status)}><Icon/><span>{label}</span></button>;
+                })}
+              </div>
+
+              <div className="trip-meta">
+                <div><span>Fahrer</span><strong>{driverName}</strong></div>
+                <div><span>Fahrzeug</span><strong>{currentTrip.vehicle}</strong></div>
+                <div><span>Status seit</span><strong>{new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr</strong></div>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="empty-driver-state"><CheckCircle2/><h2>Aktuell keine aktive Fahrt</h2><p>Neue Aufträge vom Büro erscheinen automatisch hier.</p></section>
+        )}
+
+        <section className="driver-upcoming">
+          <div className="section-title"><h2>Nächste Fahrten</h2><span>{myTrips.length} geplant</span></div>
+          <div className="upcoming-list">
+            {myTrips.filter(t => t.id !== currentTrip?.id).map(t => (
+              <div className="upcoming-card" key={t.id}>
+                <div className="upcoming-time">{t.time}</div>
+                <div><strong>{t.patient}</strong><span>{t.type} · {t.to}</span></div>
+                <StatusPill status={t.status}/>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default App;
