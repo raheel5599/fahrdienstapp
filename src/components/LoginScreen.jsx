@@ -71,7 +71,7 @@ export default function LoginScreen({ onLogin }) {
         <aside className="demo-login">
           <div className="demo-heading">
             <UserRound size={18}/>
-            <div><strong>{demoEnabled ? 'Entwicklungszugänge' : 'Produktivzugang'}</strong><span>{demoEnabled ? 'Nur für die aktuelle Aufbauphase' : 'Demo-Anmeldung gesperrt'}</span></div>
+            <div><strong>{demoEnabled ? 'Entwicklungszugänge' : 'Produktivzugang'}</strong><span>{demoEnabled ? 'Nur für die aktuelle Aufbauphase' : 'Persönliche Benutzerkonten aktiv'}</span></div>
           </div>
           {demoEnabled ? (
             <>
@@ -86,11 +86,11 @@ export default function LoginScreen({ onLogin }) {
               <small className="demo-note">Vor dem Livegang wird dieser Demo-Login durch die echte Benutzeranmeldung ersetzt.</small>
             </>
           ) : (
-            <small className="demo-note">Die Oberfläche ist vorbereitet. Der produktive Login wird erst nach Anbindung der echten Benutzerverwaltung freigeschaltet.</small>
+            <small className="demo-note">Nach der einmaligen Admin-Einrichtung werden weitere Chef-, Büro- und Fahrer-Zugänge in der Benutzerverwaltung angelegt.</small>
           )}
         </aside>
       </section>
-      {showAdminSetup && <AdminSetup />}
+      {showAdminSetup && <AdminSetup onClose={() => setShowAdminSetup(false)} onCreated={({ email: newEmail, password: newPassword }) => { setEmail(newEmail); setPassword(newPassword); setError(''); setShowAdminSetup(false); }} />}
     </main>
   );
 }
