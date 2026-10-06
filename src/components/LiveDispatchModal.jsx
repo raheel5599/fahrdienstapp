@@ -9,8 +9,31 @@ function localDate(){
 }
 function addressOf(c){return [c?.street,c?.postalCode,c?.city].filter(Boolean).join(', ');}
 function fmt(value){return value?new Date(value).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';}
+function durationFor(type){
+  const value=String(type||'').toLowerCase();
+  if(value.includes('dialyse')||value.includes('chemo')||value.includes('krankenhaus')) return 90;
+  if(value.includes('rollstuhl')) return 75;
+  return 60;
+}
+function minuteOfDay(value){
+  const parts=String(value||'00:00').split(':').map(Number);
+  return (parts[0]||0)*60+(parts[1]||0);
+}
+function hasConflict(form,trips,driverId,vehicleId,excludeId){
+  if(!form.serviceDate||!form.scheduledTime)return null;
+  const start=minuteOfDay(form.scheduledTime);
+  const duration=durationFor(form.tripType);
+  return (trips||[]).find(item=>{
+    if(item.id===excludeId||item.date!==form.serviceDate||['abgeschlossen','storniert','no_show'].includes(item.status))return false;
+    if(driverId&&item.driverId!==driverId)return false;
+    if(vehicleId&&item.vehicleId!==vehicleId)return false;
+    const otherStart=minuteOfDay(item.time);
+    const otherDuration=durationFor(item.type);
+    return start<otherStart+otherDuration+15&&otherStart<start+duration+15;
+  })||null;
+}
 
-export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose,onSaved}){
+export default function LiveDispatchModal({trip,trips=[],clients,drivers,vehicles,onClose,onSaved}){
   const initialCustomer=clients.find(c=>c.id===trip?.customerId)||clients[0]||null;
   const initialDriver=drivers.find(d=>d.id===trip?.driverId)||null;
   const [form,setForm]=useState({
@@ -37,9 +60,17 @@ export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose
   },[form.driverId,selectedDriver?.vehicleId]);
 
   const availableVehicles=useMemo(
-    ()=>vehicles.filter(v=>v.active!==false),
+    ()=>vehicles.filter(v=>v.active!==false&&!['werkstatt','offline'].includes(v.status)),
     [vehicles]
   );
+  const driverConflict=useMemo(()=>form.driverId?hasConflict(form,trips,form.driverId,null,trip?.id):null,[form.serviceDate,form.scheduledTime,form.tripType,form.driverId,trips,trip?.id]);
+  const vehicleConflict=useMemo(()=>form.vehicleId?hasConflict(form,trips,null,form.vehicleId,trip?.id):null,[form.serviceDate,form.scheduledTime,form.tripType,form.vehicleId,trips,trip?.id]);
+  const suggestedDriver=useMemo(()=>drivers.find(driver=>{
+    if(driver.active===false||['offline','pause'].includes(driver.status)||!driver.vehicleId)return false;
+    const vehicle=vehicles.find(v=>v.id===driver.vehicleId);
+    if(!vehicle||vehicle.active===false||['werkstatt','offline'].includes(vehicle.status))return false;
+    return !hasConflict(form,trips,driver.id,null,trip?.id)&&!hasConflict(form,trips,null,driver.vehicleId,trip?.id);
+  })||null,[drivers,vehicles,trips,form.serviceDate,form.scheduledTime,form.tripType,trip?.id]);
 
   function chooseCustomer(id){
     const c=clients.find(x=>x.id===id);
@@ -55,6 +86,8 @@ export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose
     e.preventDefault();
     setSaving(true);setError('');
     try{
+      if(driverConflict){setError('Fahrer-Konflikt: Die ausgewählte Fahrt überschneidet sich mit einer anderen Fahrt inklusive 15 Minuten Puffer.');return;}
+      if(vehicleConflict){setError('Fahrzeug-Konflikt: Das ausgewählte Fahrzeug ist in diesem Zeitraum bereits eingeplant.');return;}
       if(trip?.id){
         if(!form.driverId||!form.vehicleId){setError('Bitte Fahrer und Fahrzeug auswählen.');return;}
         const result=await assignTrip(trip.id,form.driverId,form.vehicleId);
@@ -107,12 +140,14 @@ export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose
       </div>
 
       <div className="form-section-title">Zuweisung</div>
+      {suggestedDriver&&!form.driverId&&<div className="dispatch-suggestion"><strong>Intelligenter Vorschlag</strong><span>{suggestedDriver.name} · {suggestedDriver.vehicle||'Fahrzeug zugeordnet'} ist in diesem Zeitfenster frei.</span><button type="button" className="text-button" onClick={()=>setForm(v=>({...v,driverId:suggestedDriver.id,vehicleId:suggestedDriver.vehicleId||''}))}>Übernehmen</button></div>}
       <div className="form-grid">
         <label><span>Fahrer</span><select value={form.driverId} onChange={e=>{const id=e.target.value;const d=drivers.find(x=>x.id===id);setForm(v=>({...v,driverId:id,vehicleId:d?.vehicleId||v.vehicleId}));}}><option value="">Noch nicht zuweisen</option>{drivers.filter(d=>d.active!==false).map(d=><option key={d.id} value={d.id}>{d.name} · {d.status}</option>)}</select></label>
         <label><span>Fahrzeug</span><select value={form.vehicleId} onChange={e=>set('vehicleId',e.target.value)} disabled={!form.driverId}><option value="">Fahrzeug auswählen</option>{availableVehicles.map(v=><option key={v.id} value={v.id}>{v.registration} · {v.status}</option>)}</select></label>
         <label className="wide"><span>Interne Notiz</span><textarea rows="2" value={form.notes} onChange={e=>set('notes',e.target.value)} disabled={Boolean(trip)}/></label>
       </div>
 
+      {(driverConflict||vehicleConflict)&&<div className="dispatch-conflict-warning"><strong>Termin-Konflikt erkannt</strong><span>{driverConflict?'Der Fahrer ist in diesem Zeitfenster bereits eingeplant. ':''}{vehicleConflict?'Das Fahrzeug ist in diesem Zeitfenster bereits eingeplant. ':''}Berechnet mit geschätzter Fahrtdauer und 15 Minuten Puffer.</span></div>}
       {trip&&<div className="dispatch-timeline">
         <div><span>Zugewiesen</span><strong>{fmt(trip.assignedAt)}</strong></div>
         <div><span>Auf dem Weg</span><strong>{fmt(trip.onTheWayAt)}</strong></div>
@@ -126,7 +161,7 @@ export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose
         {trip&& !['abgeschlossen','storniert'].includes(trip.status)&&<button type="button" className="danger-button" onClick={cancel} disabled={saving}>Fahrt stornieren</button>}
         <span/>
         <button type="button" className="secondary-button" onClick={onClose}>Abbrechen</button>
-        <button className="primary-button" disabled={saving||!clients.length}>{saving?'Wird gespeichert …':trip?'Zuweisung speichern':'Fahrt speichern'}</button>
+        <button className="primary-button" disabled={saving||!clients.length||Boolean(driverConflict)||Boolean(vehicleConflict)}>{saving?'Wird gespeichert …':trip?'Zuweisung speichern':'Fahrt speichern'}</button>
       </div>
     </form>
   </div>;

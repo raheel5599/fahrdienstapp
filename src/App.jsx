@@ -216,6 +216,7 @@ function App() {
       {dispatchOpen && can(PERMISSIONS.TRIPS_MANAGE) && (
         <LiveDispatchModal
           trip={dispatchOpen === true ? null : dispatchData.trips.find(item => item.id === dispatchOpen)}
+          trips={dispatchData.trips}
           clients={clientData.clients}
           drivers={drivers}
           vehicles={fleet.vehicles}

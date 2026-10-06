@@ -252,3 +252,13 @@ button,input,select{font:inherit}button{cursor:pointer}.icon-button{border:0;bac
 .dispatch-timeline>div{border:1px solid var(--line);border-radius:9px;padding:9px;background:#fafbfc;display:flex;flex-direction:column;gap:3px}
 .dispatch-timeline span{font-size:10px;color:var(--muted)}.dispatch-timeline strong{font-size:11px}
 @media(max-width:760px){.dispatch-timeline{grid-template-columns:1fr 1fr}}
+
+
+/* Driver notifications and smart dispatch */
+.dispatch-suggestion{margin:-2px 0 14px;padding:12px 13px;border:1px solid #ead49f;background:#fff8e8;border-radius:10px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.dispatch-suggestion strong{font-size:12px}.dispatch-suggestion span{font-size:11px;color:#6e654f}.dispatch-suggestion .text-button{white-space:nowrap}
+.dispatch-conflict-warning{margin:10px 0 14px;padding:11px 13px;border:1px solid #e9b8b8;background:#fff4f3;border-radius:10px;display:flex;flex-direction:column;gap:4px;color:#9d2d2d}.dispatch-conflict-warning strong{font-size:12px}.dispatch-conflict-warning span{font-size:11px;line-height:1.45}
+.driver-notification-banner{display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;border:1px solid #ead49f;background:#fff8e8;border-radius:12px;padding:12px 14px;margin-bottom:14px}.driver-notification-banner>svg{color:#a56d0a}.driver-notification-banner>div{display:flex;flex-direction:column;gap:3px}.driver-notification-banner strong{font-size:12px}.driver-notification-banner span{font-size:11px;color:#6e654f}.driver-notification-banner.muted{background:#f7f8fa;border-color:#dfe3e7}.driver-notification-banner.muted>svg{color:#7a8087}
+.driver-reminder{display:flex;flex-direction:column;gap:3px;border:1px solid #ead49f;background:#fff8e8;border-radius:11px;padding:11px 13px;margin-bottom:14px}.driver-reminder strong{font-size:12px}.driver-reminder span{font-size:11px;color:#6e654f}.driver-reminder.overdue{border-color:#e6b4b4;background:#fff2f1}.driver-reminder.overdue strong,.driver-reminder.overdue span{color:#a23434}
+.driver-nav-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}.driver-nav-actions button{border:1px solid var(--line);background:#fff;border-radius:10px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:12px;cursor:pointer}.driver-nav-actions button:hover{background:#f7f8fa}.driver-nav-actions svg{width:17px;height:17px}
+@media(max-width:720px){.dispatch-suggestion{grid-template-columns:1fr}.dispatch-suggestion .text-button{justify-self:start}.driver-notification-banner{grid-template-columns:36px 1fr}.driver-notification-banner .primary-button{grid-column:1/-1;width:100%}.driver-nav-actions{grid-template-columns:1fr}}

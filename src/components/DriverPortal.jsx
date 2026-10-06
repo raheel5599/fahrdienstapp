@@ -1,5 +1,5 @@
-import React,{useMemo,useState} from 'react';
-import {Car,CheckCircle2,LogOut,MapPinned,Route} from 'lucide-react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {Bell,BellOff,Car,CheckCircle2,LogOut,MapPin,MapPinned,Navigation,Route} from 'lucide-react';
 import {APP_CONFIG} from '../config/app.js';
 import {DRIVER_WORKFLOW,STATUS_LABELS,TRIP_STATUS} from '../domain/trips.js';
 import {updateTripStatus} from '../data/dispatch.js';
@@ -11,10 +11,48 @@ function statusTime(trip){
   const value=map[trip.status];
   return value?new Date(value).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'—';
 }
+function minutesUntil(trip){
+  if(!trip?.date||!trip?.time)return null;
+  return Math.round((new Date(trip.date+'T'+trip.time+':00').getTime()-Date.now())/60000);
+}
+function mapUrl(address){
+  const target=encodeURIComponent(address||'');
+  const isiOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  return isiOS?'https://maps.apple.com/?daddr='+target:'https://www.google.com/maps/dir/?api=1&destination='+target;
+}
+function readNotified(){
+  try{return JSON.parse(localStorage.getItem('tariq-driver-notified-v1')||'{}');}
+  catch{return {};}
+}
+function rememberNotified(key){
+  const map=readNotified();
+  map[key]=Date.now();
+  const cutoff=Date.now()-7*24*60*60*1000;
+  Object.keys(map).forEach(k=>{if(map[k]<cutoff)delete map[k];});
+  localStorage.setItem('tariq-driver-notified-v1',JSON.stringify(map));
+}
+function wasNotified(key){
+  const ts=readNotified()[key];
+  return Boolean(ts&&Date.now()-ts<48*60*60*1000);
+}
+async function notify(title,body,tag){
+  if(!('Notification'in window)||Notification.permission!=='granted')return false;
+  try{
+    if('serviceWorker'in navigator){
+      const registration=await navigator.serviceWorker.ready;
+      await registration.showNotification(title,{body,tag,renotify:true,data:{url:'/'}})
+      return true;
+    }
+    new Notification(title,{body,tag});
+    return true;
+  }catch{return false;}
+}
 
 export default function DriverPortal({data,user,onLogout}){
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
+  const timerRef=useRef(null);
 
   const visibleTrips=useMemo(
     ()=>data.trips.filter(t=>!['abgeschlossen','storniert','no_show'].includes(t.status)),
@@ -28,12 +66,56 @@ export default function DriverPortal({data,user,onLogout}){
   );
   const upcoming=visibleTrips.filter(t=>t.id!==active?.id);
   const progressIndex=active?DRIVER_WORKFLOW.indexOf(active.status):-1;
+  const dueIn=active?.status===TRIP_STATUS.PLANNED?minutesUntil(active):null;
   const actions=[
     [TRIP_STATUS.ON_THE_WAY,'Auf dem Weg',Route],
     [TRIP_STATUS.ARRIVED,'Angekommen',MapPinned],
     [TRIP_STATUS.IN_PROGRESS,'Fahrt starten',Car],
     [TRIP_STATUS.COMPLETED,'Fahrt beenden',CheckCircle2]
   ];
+
+  async function requestNotifications(){
+    if(!('Notification'in window)){setPermission('unsupported');return;}
+    const next=await Notification.requestPermission();
+    setPermission(next);
+  }
+
+  useEffect(()=>{
+    if(permission!=='granted')return undefined;
+
+    const check=async()=>{
+      for(const trip of data.trips){
+        if(trip.status===TRIP_STATUS.PLANNED){
+          const assignedKey='assigned:'+trip.id+':'+String(trip.assignedAt||'');
+          if(trip.assignedAt&&!wasNotified(assignedKey)){
+            const assignedAgo=Date.now()-new Date(trip.assignedAt).getTime();
+            if(assignedAgo>=0&&assignedAgo<5*60*1000){
+              if(await notify('Neuer Fahrauftrag',trip.time+' Uhr · '+(trip.patient||'Kunde')+' · '+trip.to,assignedKey))rememberNotified(assignedKey);
+            }
+          }
+          const mins=minutesUntil(trip);
+          const soonKey='soon:'+trip.id+':'+trip.date+':'+trip.time;
+          if(mins!==null&&mins<=15&&mins>=0&&!wasNotified(soonKey)){
+            if(await notify('Fahrt beginnt bald','Start in '+mins+' Minuten · '+(trip.patient||'Kunde'),soonKey))rememberNotified(soonKey);
+          }
+          const overdueKey='overdue:'+trip.id+':'+trip.date+':'+trip.time;
+          if(mins!==null&&mins<0&&mins>=-60&&!wasNotified(overdueKey)){
+            if(await notify('Fahrtstatus prüfen','Die geplante Startzeit ist seit '+Math.abs(mins)+' Minuten überschritten.',overdueKey))rememberNotified(overdueKey);
+          }
+        }
+        if(trip.status==='storniert'){
+          const cancelKey='cancel:'+trip.id+':'+String(trip.cancelledAt||trip.updatedAt||'');
+          if(!wasNotified(cancelKey)){
+            if(await notify('Fahrt storniert',(trip.patient||'Kunde')+' · '+trip.date+' · '+trip.time,cancelKey))rememberNotified(cancelKey);
+          }
+        }
+      }
+    };
+
+    check();
+    timerRef.current=window.setInterval(check,60000);
+    return()=>{if(timerRef.current)window.clearInterval(timerRef.current);};
+  },[permission,data.trips]);
 
   async function changeStatus(status){
     if(!active)return;
@@ -60,8 +142,14 @@ export default function DriverPortal({data,user,onLogout}){
         <div className="driver-count">{visibleTrips.length}<span>offene Aufträge</span></div>
       </div>
 
+      {permission==='default'&&<div className="driver-notification-banner"><Bell/><div><strong>Fahrtbenachrichtigungen aktivieren</strong><span>Neue Aufträge und Erinnerungen direkt auf diesem Gerät anzeigen.</span></div><button className="primary-button" onClick={requestNotifications}>Aktivieren</button></div>}
+      {permission==='denied'&&<div className="driver-notification-banner muted"><BellOff/><div><strong>Benachrichtigungen sind blockiert</strong><span>Bitte in den Geräteeinstellungen für diese Web-App freigeben.</span></div></div>}
+
       {error&&<div className="users-error">{error}</div>}
       {data.error&&<div className="users-error">{data.error}</div>}
+
+      {active&&active.status===TRIP_STATUS.PLANNED&&dueIn!==null&&dueIn<=15&&dueIn>=0&&<div className="driver-reminder"><strong>Fahrt beginnt bald</strong><span>Geplanter Start in {dueIn} Minuten. Bitte rechtzeitig auf „Auf dem Weg“ stellen.</span></div>}
+      {active&&active.status===TRIP_STATUS.PLANNED&&dueIn!==null&&dueIn<0&&<div className="driver-reminder overdue"><strong>Status prüfen</strong><span>Die geplante Startzeit ist seit {Math.abs(dueIn)} Minuten überschritten.</span></div>}
 
       {data.loading?<section className="empty-driver-state"><Car/><h2>Aufträge werden geladen …</h2></section>:active?(
         <section className="driver-current">
@@ -78,6 +166,11 @@ export default function DriverPortal({data,user,onLogout}){
               <div className="route-point"><span>A</span><div><small>Abholung</small><strong>{active.from}</strong></div></div>
               <div className="route-line"/>
               <div className="route-point destination"><span>Z</span><div><small>Ziel</small><strong>{active.to}</strong></div></div>
+            </div>
+
+            <div className="driver-nav-actions">
+              <button onClick={()=>window.open(mapUrl(active.from),'_blank','noopener,noreferrer')}><MapPin/><span>Zur Abholung navigieren</span></button>
+              <button onClick={()=>window.open(mapUrl(active.to),'_blank','noopener,noreferrer')}><Navigation/><span>Zum Ziel navigieren</span></button>
             </div>
 
             <div className="progress-track">
