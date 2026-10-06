@@ -11,6 +11,9 @@ import { NAV_PERMISSION, PERMISSIONS, ROLE_LABELS } from './auth/permissions.js'
 import { useAuthSession } from './auth/useAuthSession.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import UserManagement from './components/UserManagement.jsx';
+import DriverManagement from './components/DriverManagement.jsx';
+import VehicleManagement from './components/VehicleManagement.jsx';
+import { useFleetData } from './hooks/useFleetData.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -54,17 +57,21 @@ function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
-  const [drivers, setDrivers] = usePersistentState('drivers', driversSeed);
+  const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
+  const fleet = useFleetData(Boolean(session));
+  const drivers = fleet.remote ? fleet.drivers : demoDrivers;
+  const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
+  const activeTrips = session?.mode === 'supabase' ? [] : trips;
   const driverName = session?.user?.driverName || 'Imran';
 
   const metrics = useMemo(() => ({
-    today: trips.length,
-    moving: trips.filter(t => [TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)).length,
-    done: trips.filter(t => t.status === TRIP_STATUS.COMPLETED).length,
-    open: trips.filter(t => t.status === TRIP_STATUS.OPEN).length
-  }), [trips]);
+    today: activeTrips.length,
+    moving: activeTrips.filter(t => [TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)).length,
+    done: activeTrips.filter(t => t.status === TRIP_STATUS.COMPLETED).length,
+    open: activeTrips.filter(t => t.status === TRIP_STATUS.OPEN).length
+  }), [activeTrips]);
 
-  const currentDriverTrip = trips.find(t =>
+  const currentDriverTrip = activeTrips.find(t =>
     t.driver === driverName && [TRIP_STATUS.PLANNED,TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)
   );
 
@@ -95,7 +102,7 @@ function App() {
     } : t));
 
     if (trip.driver) {
-      setDrivers(prev => prev.map(d =>
+      setDriverState(prev => prev.map(d =>
         d.name === trip.driver
           ? { ...d, status: status === TRIP_STATUS.COMPLETED ? 'frei' : status }
           : d
@@ -119,7 +126,7 @@ function App() {
   if (user.role === ROLES.DRIVER) {
     return (
       <DriverApp
-        trips={trips}
+        trips={activeTrips}
         driverName={driverName}
         currentTrip={currentDriverTrip}
         onStatus={updateTripStatus}
@@ -181,6 +188,10 @@ function App() {
 
           {active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
             <UserManagement drivers={drivers} currentUser={user} />
+          ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
+            <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
+          ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
+            <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'dashboard' || active === 'disposition' ? (
             <>
               <div className="metrics">
@@ -388,7 +399,7 @@ function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) 
 }
 
 function DriverApp({ trips, driverName, currentTrip, onStatus, onLogout, user }) {
-  const myTrips = trips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
+  const myTrips = activeTrips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
   const progressIndex = currentTrip ? statusOrder.indexOf(currentTrip.status) : -1;
 
   const actions = [
