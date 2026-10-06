@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { APP_CONFIG, ROLES } from '../config/app.js';
 import { hasPermission } from './permissions.js';
+import {
+  authenticateDirectoryUser,
+  ensureUserDirectory,
+  listUsers,
+  subscribeUserDirectory
+} from './userDirectory.js';
 
 const STORAGE_KEY = 'tariq-auth-session-v1';
 const SESSION_HOURS = 12;
@@ -69,29 +75,18 @@ export function useAuthSession() {
 
   const login = async (email, password) => {
     if (!DEMO_AUTH_ENABLED) {
-      return { ok: false, message: 'Die echte Benutzeranmeldung wird gerade eingerichtet. Der Demo-Login ist im Produktivbetrieb gesperrt.' };
+      return { ok: false, message: 'Die echte Benutzeranmeldung wird gerade eingerichtet. Der lokale Benutzer-Login ist im Produktivbetrieb gesperrt.' };
     }
 
-    const normalizedEmail = String(email || '').trim().toLowerCase();
-    const user = DEMO_USERS.find(item =>
-      item.email.toLowerCase() === normalizedEmail && item.password === password
-    );
-
-    if (!user) {
-      return { ok: false, message: 'E-Mail oder Passwort ist nicht korrekt.' };
-    }
+    await ensureUserDirectory();
+    const result = await authenticateDirectoryUser(email, password);
+    if (!result.ok) return result;
 
     const nextSession = {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        driverName: user.driverName || null
-      },
+      user: result.user,
       issuedAt: Date.now(),
       expiresAt: Date.now() + SESSION_HOURS * 60 * 60 * 1000,
-      mode: 'demo'
+      mode: 'local-directory'
     };
 
     saveSession(nextSession);
@@ -103,6 +98,24 @@ export function useAuthSession() {
     saveSession(null);
     setSession(null);
   };
+
+  React.useEffect(() => {
+    if (!session?.user?.id) return undefined;
+
+    const syncSessionUser = () => {
+      const current = listUsers().find(user => user.id === session.user.id);
+      if (!current || !current.active) {
+        saveSession(null);
+        setSession(null);
+        return;
+      }
+      const nextSession = { ...session, user: current };
+      saveSession(nextSession);
+      setSession(nextSession);
+    };
+
+    return subscribeUserDirectory(syncSessionUser);
+  }, [session?.user?.id]);
 
   const can = (permission) => hasPermission(session?.user?.role, permission);
 
