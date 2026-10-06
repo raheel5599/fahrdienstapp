@@ -8,6 +8,7 @@ function localDate(){
   return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 }
 function addressOf(c){return [c?.street,c?.postalCode,c?.city].filter(Boolean).join(', ');}
+function fmt(value){return value?new Date(value).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';}
 
 export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose,onSaved}){
   const initialCustomer=clients.find(c=>c.id===trip?.customerId)||clients[0]||null;
@@ -112,6 +113,13 @@ export default function LiveDispatchModal({trip,clients,drivers,vehicles,onClose
         <label className="wide"><span>Interne Notiz</span><textarea rows="2" value={form.notes} onChange={e=>set('notes',e.target.value)} disabled={Boolean(trip)}/></label>
       </div>
 
+      {trip&&<div className="dispatch-timeline">
+        <div><span>Zugewiesen</span><strong>{fmt(trip.assignedAt)}</strong></div>
+        <div><span>Auf dem Weg</span><strong>{fmt(trip.onTheWayAt)}</strong></div>
+        <div><span>Angekommen</span><strong>{fmt(trip.arrivedAt)}</strong></div>
+        <div><span>Fahrt gestartet</span><strong>{fmt(trip.startedAt)}</strong></div>
+        <div><span>Fahrt beendet</span><strong>{fmt(trip.completedAt)}</strong></div>
+      </div>}
       {error&&<div className="login-error">{error}</div>}
       <div className="modal-summary"><ShieldCheck size={18}/><span>Nach der Zuweisung erscheint die Fahrt automatisch in der Fahrer-Web-App. Statuswechsel und Uhrzeiten werden zentral protokolliert.</span></div>
       <div className="modal-actions dispatch-modal-actions">
