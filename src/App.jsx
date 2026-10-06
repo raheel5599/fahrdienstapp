@@ -59,6 +59,7 @@ function App() {
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [clientEditor, setClientEditor] = useState(null);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
   const fleet = useFleetData(Boolean(session));
