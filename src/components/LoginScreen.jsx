@@ -3,6 +3,7 @@ import { LockKeyhole, LogIn, ShieldCheck, UserRound } from 'lucide-react';
 import { APP_CONFIG } from '../config/app.js';
 import { getDemoUsers, isDemoAuthEnabled } from '../auth/useAuthSession.js';
 import { ROLE_LABELS } from '../auth/permissions.js';
+import AdminSetup from './AdminSetup.jsx';
 
 export default function LoginScreen({ onLogin }) {
   const demoUsers = getDemoUsers();
@@ -11,6 +12,7 @@ export default function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState(demoUsers[0]?.demoPassword || '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showAdminSetup, setShowAdminSetup] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -58,6 +60,8 @@ export default function LoginScreen({ onLogin }) {
             <LogIn size={18}/>{busy ? 'Anmeldung läuft ...' : 'Anmelden'}
           </button>
 
+          <button type="button" className="secondary-button login-submit" onClick={() => setShowAdminSetup(true)}>Admin-Zugang einrichten</button>
+
           <div className="login-security">
             <ShieldCheck size={18}/>
             <span>Die Rollen steuern Navigation, Funktionen und Fahrerzugriff.</span>
@@ -86,6 +90,7 @@ export default function LoginScreen({ onLogin }) {
           )}
         </aside>
       </section>
+      {showAdminSetup && <AdminSetup />}
     </main>
   );
 }
