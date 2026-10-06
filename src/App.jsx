@@ -13,11 +13,15 @@ import LoginScreen from './components/LoginScreen.jsx';
 import UserManagement from './components/UserManagement.jsx';
 import ClientManagement from './components/ClientManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
+import LiveDispatchBoard from './components/LiveDispatchBoard.jsx';
+import LiveDispatchModal from './components/LiveDispatchModal.jsx';
+import DriverPortal from './components/DriverPortal.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
 import { useClientData } from './hooks/useClientData.js';
 import { useScheduleData } from './hooks/useScheduleData.js';
+import { useDispatchData } from './hooks/useDispatchData.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -62,9 +66,11 @@ function App() {
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
-  const fleet = useFleetData(Boolean(session));
-  const clientData = useClientData(Boolean(session));
-  const scheduleData = useScheduleData(Boolean(session));
+  const isStaffSession = Boolean(session && session.user.role !== ROLES.DRIVER);
+  const fleet = useFleetData(isStaffSession);
+  const clientData = useClientData(isStaffSession);
+  const scheduleData = useScheduleData(isStaffSession);
+  const dispatchData = useDispatchData(Boolean(session));
   const drivers = fleet.remote ? fleet.drivers : demoDrivers;
   const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
   const activeTrips = session?.mode === 'supabase' ? [] : trips;
@@ -130,16 +136,7 @@ function App() {
   };
 
   if (user.role === ROLES.DRIVER) {
-    return (
-      <DriverApp
-        trips={activeTrips}
-        driverName={driverName}
-        currentTrip={currentDriverTrip}
-        onStatus={updateTripStatus}
-        onLogout={logout}
-        user={user}
-      />
-    );
+    return <DriverPortal data={dispatchData} user={user} onLogout={logout} />;
   }
 
   return (
@@ -203,86 +200,13 @@ function App() {
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'dashboard' || active === 'disposition' ? (
-            <>
-              <div className="metrics">
-                <Metric icon={CalendarDays} label="Heute geplant" value={metrics.today} note="Fahrten gesamt" />
-                <Metric icon={Car} label="Unterwegs" value={metrics.moving} note="Live aktiv" />
-                <Metric icon={CheckCircle2} label="Abgeschlossen" value={metrics.done} note="Heute fertig" />
-                <Metric icon={Clock3} label="Offen" value={metrics.open} note="Wartet auf Fahrer" warning={metrics.open > 0} />
-              </div>
-
-              <div className="dashboard-grid">
-                <section className="panel trips-panel">
-                  <PanelTitle icon={Route} title="Heute – Live-Disposition" right={<button className="text-button">Alle Fahrten</button>} />
-                  <div className="trip-list">
-                    {trips.map(t => (
-                      <div className="trip-row" key={t.id}>
-                        <div className="time">{t.time}</div>
-                        <div className="trip-main">
-                          <div className="patient-line">
-                            <strong>{t.patient}</strong>
-                            {t.wheelchair && <span className="mini-badge">Rollstuhl</span>}
-                          </div>
-                          <span>{t.type} · {t.to}</span>
-                        </div>
-                        <div className="trip-assignment">
-                          <strong>{t.driver || 'Noch offen'}</strong>
-                          <span>{t.vehicle || 'Kein Fahrzeug'}</span>
-                        </div>
-                        <StatusPill status={t.status} />
-                        <button className="row-action" onClick={() => setDispatchOpen(t.id)}>Bearbeiten</button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="panel driver-panel">
-                  <PanelTitle icon={UserRoundCheck} title="Fahrerstatus" right={<span className="live-label"><span/> LIVE</span>} />
-                  <div className="driver-cards">
-                    {drivers.map(d => (
-                      <div className="driver-card" key={d.name}>
-                        <div className="driver-avatar">{d.name.slice(0,1)}</div>
-                        <div><strong>{d.name}</strong><span>{d.vehicle}</span></div>
-                        <StatusPill status={d.status === 'frei' ? 'abgeschlossen' : d.status} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="panel map-panel">
-                  <PanelTitle icon={MapPinned} title="Fahrzeuge Live" right={<button className="text-button">Karte öffnen</button>} />
-                  <div className="map-placeholder">
-                    <div className="map-grid" />
-                    <div className="map-city city-one">FRANKFURT</div>
-                    <div className="map-city city-two">FRIEDBERG</div>
-                    <div className="map-city city-three">FLORSTADT</div>
-                    {drivers.slice(0,5).map((d, i) => (
-                      <div key={d.name} className={`vehicle-pin pin-${i+1}`}><Car size={16}/><span>{d.vehicle}</span></div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="panel quick-panel">
-                  <PanelTitle icon={Gauge} title="Schnellaktionen" />
-                  <div className="quick-grid">
-                    <Quick icon={UsersRound} text="Neuer Kunde" />
-                    <Quick icon={CalendarDays} text="Neue Fahrt" onClick={() => setDispatchOpen(true)} />
-                    <Quick icon={ReceiptText} text="Rechnung erstellen" />
-                    <Quick icon={BadgeEuro} text="Abrechnung starten" />
-                    <Quick icon={Car} text="Fahrzeug buchen" />
-                    <Quick icon={ChartNoAxesCombined} text="Bericht erstellen" />
-                  </div>
-                </section>
-              </div>
-
-              <div className="module-strip">
-                <Feature icon={Stethoscope} title="Stammkunden" text="Dialyse, Reha, Serienfahrten" />
-                <Feature icon={WalletCards} title="Kassen & Verträge" text="AOK, TK, BARMER, DAK u. a." />
-                <Feature icon={FileText} title="Verordnungen" text="Dokumente direkt zur Fahrt" />
-                <Feature icon={BookOpenCheck} title="Buchhaltung" text="Belege, Rechnungen, Auswertung" />
-                <Feature icon={Activity} title="Lückenlose Historie" text="Fahrer, Fahrzeug, Uhrzeiten, Status" />
-              </div>
-            </>
+            <LiveDispatchBoard
+              data={dispatchData}
+              drivers={drivers}
+              vehicles={fleet.vehicles}
+              onNew={() => setDispatchOpen(true)}
+              onEdit={id => setDispatchOpen(id)}
+            />
           ) : (
             <ModulePlaceholder active={active} onNewTrip={() => setDispatchOpen(true)} />
           )}
@@ -290,15 +214,15 @@ function App() {
       </main>
 
       {dispatchOpen && can(PERMISSIONS.TRIPS_MANAGE) && (
-        <DispatchModal
-          trips={trips}
+        <LiveDispatchModal
+          trip={dispatchOpen === true ? null : dispatchData.trips.find(item => item.id === dispatchOpen)}
+          clients={clientData.clients}
           drivers={drivers}
-          tripId={dispatchOpen === true ? null : dispatchOpen}
+          vehicles={fleet.vehicles}
           onClose={() => setDispatchOpen(false)}
-          onAssign={assignTrip}
-          onCreate={(trip) => {
-            setTrips(prev => [...prev, trip]);
+          onSaved={async () => {
             setDispatchOpen(false);
+            await Promise.all([dispatchData.refresh(), fleet.refresh()]);
           }}
         />
       )}

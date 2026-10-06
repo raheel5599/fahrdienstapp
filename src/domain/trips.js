@@ -4,7 +4,9 @@ export const TRIP_STATUS = Object.freeze({
   ON_THE_WAY: 'auf_dem_weg',
   ARRIVED: 'angekommen',
   IN_PROGRESS: 'in_fahrt',
-  COMPLETED: 'abgeschlossen'
+  COMPLETED: 'abgeschlossen',
+  CANCELLED: 'storniert',
+  NO_SHOW: 'no_show'
 });
 
 export const STATUS_LABELS = Object.freeze({
@@ -13,7 +15,9 @@ export const STATUS_LABELS = Object.freeze({
   [TRIP_STATUS.ON_THE_WAY]: 'Auf dem Weg',
   [TRIP_STATUS.ARRIVED]: 'Angekommen',
   [TRIP_STATUS.IN_PROGRESS]: 'In Fahrt',
-  [TRIP_STATUS.COMPLETED]: 'Abgeschlossen'
+  [TRIP_STATUS.COMPLETED]: 'Abgeschlossen',
+  [TRIP_STATUS.CANCELLED]: 'Storniert',
+  [TRIP_STATUS.NO_SHOW]: 'Nicht erschienen'
 });
 
 export const DRIVER_WORKFLOW = Object.freeze([
@@ -25,11 +29,14 @@ export const DRIVER_WORKFLOW = Object.freeze([
 ]);
 
 export const ALLOWED_TRANSITIONS = Object.freeze({
-  [TRIP_STATUS.PLANNED]: [TRIP_STATUS.ON_THE_WAY],
-  [TRIP_STATUS.ON_THE_WAY]: [TRIP_STATUS.ARRIVED],
-  [TRIP_STATUS.ARRIVED]: [TRIP_STATUS.IN_PROGRESS],
-  [TRIP_STATUS.IN_PROGRESS]: [TRIP_STATUS.COMPLETED],
-  [TRIP_STATUS.COMPLETED]: []
+  [TRIP_STATUS.OPEN]: [TRIP_STATUS.PLANNED, TRIP_STATUS.CANCELLED],
+  [TRIP_STATUS.PLANNED]: [TRIP_STATUS.ON_THE_WAY, TRIP_STATUS.CANCELLED, TRIP_STATUS.NO_SHOW],
+  [TRIP_STATUS.ON_THE_WAY]: [TRIP_STATUS.ARRIVED, TRIP_STATUS.CANCELLED],
+  [TRIP_STATUS.ARRIVED]: [TRIP_STATUS.IN_PROGRESS, TRIP_STATUS.CANCELLED, TRIP_STATUS.NO_SHOW],
+  [TRIP_STATUS.IN_PROGRESS]: [TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED],
+  [TRIP_STATUS.COMPLETED]: [],
+  [TRIP_STATUS.CANCELLED]: [],
+  [TRIP_STATUS.NO_SHOW]: []
 });
 
 export function canTransition(currentStatus, nextStatus) {
