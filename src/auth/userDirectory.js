@@ -124,9 +124,18 @@ export async function updateUser(userId, patch) {
   const index = users.findIndex(user => user.id === userId);
   if (index < 0) return { ok: false, message: 'Benutzer wurde nicht gefunden.' };
 
+  const normalizedPatch = { ...patch };
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'email')) {
+    normalizedPatch.email = String(normalizedPatch.email || '').trim().toLowerCase();
+    if (!normalizedPatch.email) return { ok: false, message: 'Bitte eine E-Mail-Adresse eingeben.' };
+    if (users.some(user => user.id !== userId && user.email.toLowerCase() === normalizedPatch.email)) {
+      return { ok: false, message: 'Für diese E-Mail gibt es bereits einen Benutzer.' };
+    }
+  }
+
   const next = {
     ...users[index],
-    ...patch,
+    ...normalizedPatch,
     updatedAt: new Date().toISOString()
   };
 
