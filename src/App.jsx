@@ -4,9 +4,12 @@ import {
   ChartNoAxesCombined, CheckCircle2, ChevronDown, CircleUserRound, Clock3,
   FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
   Menu, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
-  ShieldCheck, Stethoscope, UserRoundCheck, UsersRound, WalletCards, X
+  ShieldCheck, Stethoscope, UserRoundCheck, UsersRound, WalletCards, X, LogOut
 } from 'lucide-react';
-import { APP_CONFIG } from './config/app.js';
+import { APP_CONFIG, ROLES } from './config/app.js';
+import { NAV_PERMISSION, PERMISSIONS, ROLE_LABELS } from './auth/permissions.js';
+import { useAuthSession } from './auth/useAuthSession.js';
+import LoginScreen from './components/LoginScreen.jsx';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -44,13 +47,13 @@ function StatusPill({ status }) {
 }
 
 function App() {
-  const [role, setRole] = useState('office');
+  const { session, login, logout, can } = useAuthSession();
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [drivers, setDrivers] = usePersistentState('drivers', driversSeed);
-  const [driverName, setDriverName] = useState('Imran');
+  const driverName = session?.user?.driverName || 'Imran';
 
   const metrics = useMemo(() => ({
     today: trips.length,
@@ -62,6 +65,13 @@ function App() {
   const currentDriverTrip = trips.find(t =>
     t.driver === driverName && [TRIP_STATUS.PLANNED,TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)
   );
+
+  if (!session) {
+    return <LoginScreen onLogin={login} />;
+  }
+
+  const user = session.user;
+  const visibleNav = nav.filter(([id]) => can(NAV_PERMISSION[id]));
 
   const updateTripStatus = (tripId, status) => {
     const trip = trips.find(t => t.id === tripId);
@@ -100,16 +110,15 @@ function App() {
     } : t));
   };
 
-  if (role === 'driver') {
+  if (user.role === ROLES.DRIVER) {
     return (
       <DriverApp
         trips={trips}
-        drivers={drivers}
         driverName={driverName}
-        setDriverName={setDriverName}
         currentTrip={currentDriverTrip}
         onStatus={updateTripStatus}
-        onBack={() => setRole('office')}
+        onLogout={logout}
+        user={user}
       />
     );
   }
@@ -122,7 +131,7 @@ function App() {
           <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Menü schließen"><X /></button>
         </div>
         <nav>
-          {nav.map(([id, label, Icon]) => (
+          {visibleNav.map(([id, label, Icon]) => (
             <button key={id} className={active === id ? 'active' : ''} onClick={() => { setActive(id); setMobileNav(false); }}>
               <Icon size={19}/><span>{label}</span>
             </button>
@@ -130,7 +139,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div><span className="online-dot" /> System online</div>
-          <small>app.tariq-fahrdienst.de</small>
+          <small>{APP_CONFIG.domain}</small>
         </div>
       </aside>
 
@@ -144,11 +153,11 @@ function App() {
           </div>
           <div className="topbar-actions">
             <button className="icon-button bell"><Bell /><span>3</span></button>
-            <button className="role-button" onClick={() => setRole('driver')}>
+            <div className="role-button">
               <CircleUserRound size={26}/>
-              <span><strong>Tariq Admin</strong><small>Büro / Verwaltung</small></span>
-              <ChevronDown size={16}/>
-            </button>
+              <span><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></span>
+            </div>
+            <button className="icon-button logout-button" onClick={logout} aria-label="Abmelden" title="Abmelden"><LogOut size={20}/></button>
           </div>
         </header>
 
@@ -160,8 +169,7 @@ function App() {
               <p>Alle wichtigen Abläufe zentral steuern, dokumentieren und abrechnen.</p>
             </div>
             <div className="heading-actions">
-              <button className="secondary-button" onClick={() => setRole('driver')}><CircleUserRound size={18}/> Fahrer Web App</button>
-              <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>
+              {can(PERMISSIONS.TRIPS_MANAGE) && <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>}
             </div>
           </div>
 
@@ -252,7 +260,7 @@ function App() {
         </section>
       </main>
 
-      {dispatchOpen && (
+      {dispatchOpen && can(PERMISSIONS.TRIPS_MANAGE) && (
         <DispatchModal
           trips={trips}
           drivers={drivers}
@@ -371,7 +379,7 @@ function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) 
   );
 }
 
-function DriverApp({ trips, drivers, driverName, setDriverName, currentTrip, onStatus, onBack }) {
+function DriverApp({ trips, driverName, currentTrip, onStatus, onLogout, user }) {
   const myTrips = trips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
   const progressIndex = currentTrip ? statusOrder.indexOf(currentTrip.status) : -1;
 
@@ -388,10 +396,8 @@ function DriverApp({ trips, drivers, driverName, setDriverName, currentTrip, onS
         <img src={LOGO} alt="TARIQ Krankenfahrdienst" />
         <div className="driver-online"><span className="online-dot"/> Online · verfügbar</div>
         <div className="driver-select">
-          <select value={driverName} onChange={e => setDriverName(e.target.value)}>
-            {drivers.map(d => <option key={d.name}>{d.name}</option>)}
-          </select>
-          <button className="secondary-button" onClick={onBack}>Büroansicht</button>
+          <div className="driver-identity"><strong>{user.name}</strong><span>{ROLE_LABELS[user.role]}</span></div>
+          <button className="secondary-button" onClick={onLogout}><LogOut size={17}/> Abmelden</button>
         </div>
       </header>
 
