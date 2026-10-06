@@ -64,7 +64,8 @@ export const NAV_PERMISSION = Object.freeze({
   berichte: PERMISSIONS.REPORTS_VIEW,
   dokumente: PERMISSIONS.DOCUMENTS_MANAGE,
   nachrichten: PERMISSIONS.MESSAGES_USE,
-  einstellungen: PERMISSIONS.SETTINGS_MANAGE
+  einstellungen: PERMISSIONS.SETTINGS_MANAGE,
+  benutzer: PERMISSIONS.USERS_MANAGE
 });
 
 export function hasPermission(role, permission) {
