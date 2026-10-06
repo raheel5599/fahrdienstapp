@@ -193,6 +193,8 @@ function App() {
 
           {active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
             <UserManagement drivers={drivers} currentUser={user} />
+          ) : active === 'kunden' ? (
+            <section className="panel placeholder-panel"><h2>Kundenverwaltung</h2><p>{clientData.loading ? 'Daten werden geladen ...' : clientData.clients.length + ' Kunden vorhanden'}</p></section>
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
             <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
