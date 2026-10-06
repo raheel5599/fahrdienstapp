@@ -11,6 +11,7 @@ import { NAV_PERMISSION, PERMISSIONS, ROLE_LABELS } from './auth/permissions.js'
 import { useAuthSession } from './auth/useAuthSession.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import UserManagement from './components/UserManagement.jsx';
+import CE from './components/ClientEditor.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
