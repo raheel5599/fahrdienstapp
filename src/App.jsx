@@ -10,6 +10,7 @@ import { APP_CONFIG, ROLES } from './config/app.js';
 import { NAV_PERMISSION, PERMISSIONS, ROLE_LABELS } from './auth/permissions.js';
 import { useAuthSession } from './auth/useAuthSession.js';
 import LoginScreen from './components/LoginScreen.jsx';
+import UserManagement from './components/UserManagement.jsx';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -36,7 +37,8 @@ const nav = [
   ['berichte', 'Berichte & Statistiken', ChartNoAxesCombined],
   ['dokumente', 'Dokumente', FileCheck2],
   ['nachrichten', 'Nachrichten', MessageSquareText],
-  ['einstellungen', 'Einstellungen', Settings]
+  ['einstellungen', 'Einstellungen', Settings],
+  ['benutzer', 'Benutzer & Rechte', ShieldCheck]
 ];
 
 const statusLabel = STATUS_LABELS;
@@ -173,7 +175,9 @@ function App() {
             </div>
           </div>
 
-          {active === 'dashboard' || active === 'disposition' ? (
+          {active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
+            <UserManagement drivers={drivers} currentUser={user} />
+          ) : active === 'dashboard' || active === 'disposition' ? (
             <>
               <div className="metrics">
                 <Metric icon={CalendarDays} label="Heute geplant" value={metrics.today} note="Fahrten gesamt" />
