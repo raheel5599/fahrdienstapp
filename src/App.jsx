@@ -11,12 +11,11 @@ import { NAV_PERMISSION, PERMISSIONS, ROLE_LABELS } from './auth/permissions.js'
 import { useAuthSession } from './auth/useAuthSession.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import UserManagement from './components/UserManagement.jsx';
-import CE from './components/ClientEditor.jsx';
+import ClientManagement from './components/ClientManagement.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
 import { useClientData } from './hooks/useClientData.js';
-import { loadClients, createClient, updateClient, savePayer, saveDestination, saveApproval } from './data/clients.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -59,7 +58,6 @@ function App() {
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [clientEditor, setClientEditor] = useState(null);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
   const fleet = useFleetData(Boolean(session));
@@ -193,8 +191,8 @@ function App() {
 
           {active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
             <UserManagement drivers={drivers} currentUser={user} />
-          ) : active === 'kunden' ? (
-            <section className="panel placeholder-panel"><h2>Kundenverwaltung</h2><p>{clientData.loading ? 'Daten werden geladen ...' : clientData.clients.length + ' Kunden vorhanden'}</p></section>
+          ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
+            <ClientManagement data={clientData} />
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
             <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
