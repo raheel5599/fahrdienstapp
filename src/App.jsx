@@ -399,7 +399,7 @@ function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) 
 }
 
 function DriverApp({ trips, driverName, currentTrip, onStatus, onLogout, user }) {
-  const myTrips = activeTrips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
+  const myTrips = trips.filter(t => t.driver === driverName && t.status !== 'abgeschlossen');
   const progressIndex = currentTrip ? statusOrder.indexOf(currentTrip.status) : -1;
 
   const actions = [
