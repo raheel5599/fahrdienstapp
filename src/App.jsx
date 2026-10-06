@@ -19,11 +19,14 @@ import DriverPortal from './components/DriverPortal.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import ContractManagement from './components/ContractManagement.jsx';
+import InvoiceManagement from './components/InvoiceManagement.jsx';
+import ReceiptManagement from './components/ReceiptManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
 import { useClientData } from './hooks/useClientData.js';
 import { useScheduleData } from './hooks/useScheduleData.js';
 import { useDispatchData } from './hooks/useDispatchData.js';
 import { useContractData } from './hooks/useContractData.js';
+import { useFinanceData } from './hooks/useFinanceData.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -74,6 +77,7 @@ function App() {
   const scheduleData = useScheduleData(isStaffSession);
   const dispatchData = useDispatchData(Boolean(session));
   const contractData = useContractData(isStaffSession);
+  const financeData = useFinanceData(isStaffSession);
   const drivers = fleet.remote ? fleet.drivers : demoDrivers;
   const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
   const activeTrips = session?.mode === 'supabase' ? [] : trips;
@@ -196,6 +200,10 @@ function App() {
             <UserManagement drivers={drivers} currentUser={user} />
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
             <ClientManagement data={clientData} />
+          ) : active === 'rechnungen' && can(PERMISSIONS.INVOICES_MANAGE) ? (
+            <InvoiceManagement data={financeData} clients={clientData.clients} contracts={contractData} />
+          ) : active === 'abrechnung' && can(PERMISSIONS.BILLING_MANAGE) ? (
+            <ReceiptManagement data={financeData} clients={clientData.clients} />
           ) : active === 'kassen' && can(PERMISSIONS.CONTRACTS_MANAGE) ? (
             <ContractManagement data={contractData} />
           ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (
