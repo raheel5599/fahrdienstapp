@@ -18,10 +18,12 @@ import LiveDispatchModal from './components/LiveDispatchModal.jsx';
 import DriverPortal from './components/DriverPortal.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
+import ContractManagement from './components/ContractManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
 import { useClientData } from './hooks/useClientData.js';
 import { useScheduleData } from './hooks/useScheduleData.js';
 import { useDispatchData } from './hooks/useDispatchData.js';
+import { useContractData } from './hooks/useContractData.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -71,6 +73,7 @@ function App() {
   const clientData = useClientData(isStaffSession);
   const scheduleData = useScheduleData(isStaffSession);
   const dispatchData = useDispatchData(Boolean(session));
+  const contractData = useContractData(isStaffSession);
   const drivers = fleet.remote ? fleet.drivers : demoDrivers;
   const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
   const activeTrips = session?.mode === 'supabase' ? [] : trips;
@@ -193,6 +196,8 @@ function App() {
             <UserManagement drivers={drivers} currentUser={user} />
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
             <ClientManagement data={clientData} />
+          ) : active === 'kassen' && can(PERMISSIONS.CONTRACTS_MANAGE) ? (
+            <ContractManagement data={contractData} />
           ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (
             <ScheduleManagement data={scheduleData} clients={clientData.clients} />
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
