@@ -125,3 +125,32 @@ button,input,select{font:inherit}button{cursor:pointer}.icon-button{border:0;bac
   .login-form{padding:28px 22px 18px}.demo-login{padding:0 22px 30px}
   .driver-identity{display:none}
 }
+
+
+/* User administration */
+.user-management{display:grid;gap:14px}
+.user-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.user-stat{background:#fff;border:1px solid var(--line);border-radius:13px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px}
+.user-stat span{font-size:12px;color:var(--muted);font-weight:700}.user-stat strong{font-size:28px}
+.users-panel{overflow:visible}.users-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:20px;border-bottom:1px solid var(--line)}
+.users-toolbar h2{margin:3px 0 5px;font-size:24px}.users-toolbar p:last-child{margin:0;color:var(--muted);font-size:13px}
+.users-notice{margin:14px 16px 0;padding:11px 12px;border-radius:9px;background:#eef8f1;color:#237240;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.users-notice button{border:0;background:transparent;color:inherit;display:grid;place-items:center}
+.users-table-wrap{overflow:auto;padding:8px 0}.users-table{width:100%;border-collapse:collapse;min-width:960px}.users-table th,.users-table td{padding:13px 16px;text-align:left;border-bottom:1px solid #edf0f2;font-size:12px;vertical-align:middle}
+.users-table th{color:#727881;font-size:11px;text-transform:uppercase;letter-spacing:.45px;background:#fbfcfd}.users-table tbody tr:hover{background:#fcfcfd}
+.user-cell{display:flex;gap:10px;align-items:center}.user-cell>span:last-child{display:flex;flex-direction:column;gap:2px}.user-cell small{color:var(--muted)}
+.user-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#111316;color:#fff;font-weight:900}
+.role-chip,.account-status{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800;white-space:nowrap}
+.role-admin{background:#fff3dc;color:#9b6505}.role-office{background:#eaf3ff;color:#176cba}.role-driver{background:#eef1f4;color:#515a63}
+.account-status.active{background:#e9f7ed;color:#147c3c}.account-status.blocked{background:#fff0ef;color:#b23d3d}.account-status>span{width:7px;height:7px;border-radius:50%;background:currentColor}
+.user-actions{display:flex;justify-content:flex-end;gap:6px}.user-actions button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;white-space:nowrap}
+.user-actions .danger-soft{color:#b83b3b;background:#fff7f6;border-color:#f0d8d5}.user-actions .success-soft{color:#167c3f;background:#f1faf4;border-color:#d6ecdc}
+.permission-summary{padding:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.permission-summary article{border:1px solid var(--line);border-radius:11px;padding:13px;display:flex;gap:10px;background:#fbfcfd}.permission-summary svg{color:#bd861e;flex:0 0 auto}.permission-summary article div{display:flex;flex-direction:column;gap:4px}.permission-summary article span{font-size:11px;color:var(--muted);line-height:1.4}
+.user-editor{width:min(760px,100%)}
+
+@media (max-width:900px){
+  .user-stats{grid-template-columns:1fr 1fr 1fr}.users-toolbar{align-items:flex-start;flex-direction:column}.users-toolbar .primary-button{width:100%}.permission-summary{grid-template-columns:1fr}
+}
+@media (max-width:650px){
+  .user-stats{grid-template-columns:1fr}.users-toolbar{padding:16px}.user-stat{padding:13px 15px}.user-stat strong{font-size:24px}
+}
