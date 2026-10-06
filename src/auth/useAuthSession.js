@@ -98,6 +98,7 @@ export function isDemoAuthEnabled() {
 export function useAuthSession() {
   const [session, setSession] = useState(() => DEMO_AUTH_ENABLED ? readLocalSession() : null);
   const [loading, setLoading] = useState(!DEMO_AUTH_ENABLED && isRemoteBackendConfigured);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     if (DEMO_AUTH_ENABLED || !isRemoteBackendConfigured || !supabase) {
@@ -134,7 +135,8 @@ export function useAuthSession() {
 
     supabase.auth.getSession().then(({ data }) => hydrate(data.session));
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, authSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, authSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       window.setTimeout(() => hydrate(authSession), 0);
     });
 
@@ -190,6 +192,28 @@ export function useAuthSession() {
     return { ok: true };
   };
 
+  const requestPasswordReset = async (email) => {
+    if (!supabase) return { ok: false, message: 'Die zentrale Anmeldung ist nicht verfügbar.' };
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) return { ok: false, message: 'Bitte zuerst deine E-Mail-Adresse eingeben.' };
+    const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
+      redirectTo: window.location.origin
+    });
+    return error
+      ? { ok: false, message: error.message || 'Passwort-Link konnte nicht versendet werden.' }
+      : { ok: true, message: 'Wir haben dir einen Link zum Zurücksetzen des Passworts gesendet.' };
+  };
+
+  const updatePassword = async (password) => {
+    if (!supabase) return { ok: false, message: 'Die zentrale Anmeldung ist nicht verfügbar.' };
+    const next = String(password || '');
+    if (next.length < 8) return { ok: false, message: 'Das neue Passwort muss mindestens 8 Zeichen haben.' };
+    const { error } = await supabase.auth.updateUser({ password: next });
+    if (error) return { ok: false, message: error.message || 'Passwort konnte nicht geändert werden.' };
+    setPasswordRecovery(false);
+    return { ok: true };
+  };
+
   const logout = async () => {
     if (DEMO_AUTH_ENABLED) {
       saveLocalSession(null);
@@ -202,5 +226,5 @@ export function useAuthSession() {
 
   const can = (permission) => hasPermission(session?.user?.role, permission);
 
-  return { session, loading, login, logout, can };
+  return { session, loading, login, logout, can, passwordRecovery, requestPasswordReset, updatePassword };
 }
