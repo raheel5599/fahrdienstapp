@@ -154,3 +154,10 @@ button,input,select{font:inherit}button{cursor:pointer}.icon-button{border:0;bac
 @media (max-width:650px){
   .user-stats{grid-template-columns:1fr}.users-toolbar{padding:16px}.user-stat{padding:13px 15px}.user-stat strong{font-size:24px}
 }
+
+.auth-loading{min-height:100vh;background:#090a0c;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.auth-loading img{width:min(360px,72vw);max-height:120px;object-fit:contain}
+.auth-loading span{font-size:13px;color:#aab0b7;letter-spacing:.3px}
+.users-error{margin:14px 16px 0;padding:11px 12px;border-radius:9px;background:#fff0ef;color:#b23d3d;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.users-error button{border:0;background:transparent;color:inherit;display:grid;place-items:center}
+.users-loading{text-align:center!important;color:var(--muted);padding:28px!important}
