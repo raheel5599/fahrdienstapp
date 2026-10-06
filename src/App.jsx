@@ -321,7 +321,7 @@ function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) 
   const [time, setTime] = useState(existing?.time || '12:00');
   const [from, setFrom] = useState(existing?.from || '');
   const [to, setTo] = useState(existing?.to || '');
-  const [type, setType] = useState(existing?.type || 'Arztfahrt');
+  const [type, setType] = useState(existing?.type || APP_CONFIG.tripTypes[0]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -355,7 +355,7 @@ function DispatchModal({ trips, drivers, tripId, onClose, onAssign, onCreate }) 
           <label><span>Uhrzeit</span><input type="time" value={time} onChange={e => setTime(e.target.value)} required disabled={!!existing}/></label>
           <label className="wide"><span>Abholadresse</span><input value={from} onChange={e => setFrom(e.target.value)} required disabled={!!existing}/></label>
           <label className="wide"><span>Ziel</span><input value={to} onChange={e => setTo(e.target.value)} required disabled={!!existing}/></label>
-          <label><span>Fahrtart</span><select value={type} onChange={e => setType(e.target.value)} disabled={!!existing}><option>Arztfahrt</option><option>Dialyse</option><option>Chemotherapie</option><option>Reha</option><option>Krankenhaus</option></select></label>
+          <label><span>Fahrtart</span><select value={type} onChange={e => setType(e.target.value)} disabled={!!existing}>{APP_CONFIG.tripTypes.map(item => <option key={item}>{item}</option>)}</select></label>
           <label><span>Fahrer & Fahrzeug</span><select value={driver} onChange={e => setDriver(e.target.value)}><option value="">Noch nicht zuweisen</option>{drivers.map(d => <option key={d.name} value={d.name}>{d.name} · {d.vehicle} · {d.status === 'frei' ? 'frei' : statusLabel[d.status]}</option>)}</select></label>
         </div>
         <div className="modal-summary">
