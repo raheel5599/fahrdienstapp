@@ -12,10 +12,12 @@ import { useAuthSession } from './auth/useAuthSession.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import UserManagement from './components/UserManagement.jsx';
 import ClientManagement from './components/ClientManagement.jsx';
+import ScheduleManagement from './components/ScheduleManagement.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
 import { useClientData } from './hooks/useClientData.js';
+import { useScheduleData } from './hooks/useScheduleData.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
   DRIVER_WORKFLOW,
@@ -62,6 +64,7 @@ function App() {
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
   const fleet = useFleetData(Boolean(session));
   const clientData = useClientData(Boolean(session));
+  const scheduleData = useScheduleData(Boolean(session));
   const drivers = fleet.remote ? fleet.drivers : demoDrivers;
   const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
   const activeTrips = session?.mode === 'supabase' ? [] : trips;
@@ -193,6 +196,8 @@ function App() {
             <UserManagement drivers={drivers} currentUser={user} />
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
             <ClientManagement data={clientData} />
+          ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (
+            <ScheduleManagement data={scheduleData} clients={clientData.clients} />
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
             <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
