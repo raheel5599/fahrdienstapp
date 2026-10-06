@@ -161,3 +161,35 @@ button,input,select{font:inherit}button{cursor:pointer}.icon-button{border:0;bac
 .users-error{margin:14px 16px 0;padding:11px 12px;border-radius:9px;background:#fff0ef;color:#b23d3d;display:flex;justify-content:space-between;align-items:center;font-size:13px}
 .users-error button{border:0;background:transparent;color:inherit;display:grid;place-items:center}
 .users-loading{text-align:center!important;color:var(--muted);padding:28px!important}
+
+
+/* Driver and vehicle management */
+.fleet-page{display:grid;gap:14px}
+.fleet-toolbar{padding:20px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.fleet-toolbar h2{margin:3px 0 5px;font-size:24px}.fleet-toolbar p:last-child{margin:0;color:var(--muted);font-size:13px}
+.fleet-toolbar-actions{display:flex;gap:9px;flex-wrap:wrap}
+.fleet-table-wrap{overflow:auto}.fleet-table{width:100%;border-collapse:collapse;min-width:980px}
+.fleet-table th,.fleet-table td{padding:13px 16px;text-align:left;border-bottom:1px solid #edf0f2;font-size:12px;vertical-align:middle}
+.fleet-table th{color:#727881;font-size:11px;text-transform:uppercase;letter-spacing:.45px;background:#fbfcfd}
+.fleet-table small{color:var(--muted)}
+.vehicle-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.vehicle-card{padding:16px;display:flex;flex-direction:column;gap:15px}
+.vehicle-card-head{display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center}
+.vehicle-card-head>div:nth-child(2){display:flex;flex-direction:column;gap:3px}
+.vehicle-card-head>div:nth-child(2)>strong{font-size:17px}.vehicle-card-head>div:nth-child(2)>span{color:var(--muted);font-size:12px}
+.vehicle-icon{width:44px;height:44px;border-radius:12px;background:#f3f4f6;display:grid;place-items:center}
+.vehicle-details{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vehicle-details>div{padding:10px;border:1px solid var(--line);border-radius:9px;display:flex;flex-direction:column;gap:3px;background:#fafbfc}
+.vehicle-details span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}.vehicle-details strong{font-size:12px}
+.vehicle-tags{display:flex;gap:6px;flex-wrap:wrap}.vehicle-tags span{font-size:10px;border-radius:999px;background:#fff5df;color:#96650a;padding:5px 8px;font-weight:700}
+.vehicle-edit{width:100%}.empty-fleet{grid-column:1/-1;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.empty-fleet svg{width:48px;height:48px;color:#b98927}.empty-fleet h3{margin:12px 0 4px}.empty-fleet p{margin:0;color:var(--muted)}
+.checkbox-label{flex-direction:row!important;align-items:center;gap:8px!important}.checkbox-label input{width:18px;height:18px}.checkbox-label span{font-size:12px!important}
+
+@media (max-width:1150px){
+  .vehicle-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:760px){
+  .fleet-toolbar{align-items:flex-start;flex-direction:column}.fleet-toolbar-actions{width:100%}.fleet-toolbar-actions button{flex:1}
+  .vehicle-cards{grid-template-columns:1fr}.vehicle-card-head{grid-template-columns:42px 1fr}.vehicle-card-head>.account-status{grid-column:2;justify-self:start}
+}
