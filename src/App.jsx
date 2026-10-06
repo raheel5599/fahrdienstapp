@@ -14,6 +14,7 @@ import UserManagement from './components/UserManagement.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
 import VehicleManagement from './components/VehicleManagement.jsx';
 import { useFleetData } from './hooks/useFleetData.js';
+import { useClientData } from './hooks/useClientData.js';
 import { loadClients, createClient, updateClient, savePayer, saveDestination, saveApproval } from './data/clients.js';
 import { initialTrips, driversSeed } from './data/demo.js';
 import {
@@ -60,6 +61,7 @@ function App() {
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
   const fleet = useFleetData(Boolean(session));
+  const clientData = useClientData(Boolean(session));
   const drivers = fleet.remote ? fleet.drivers : demoDrivers;
   const setDriverState = fleet.remote ? (() => {}) : setDemoDrivers;
   const activeTrips = session?.mode === 'supabase' ? [] : trips;
