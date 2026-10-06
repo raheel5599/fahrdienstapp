@@ -32,7 +32,11 @@ export function useDispatchData(enabled=true){
 
   useEffect(()=>{
     refresh();
-    return()=>{if(refreshTimer.current)window.clearTimeout(refreshTimer.current);};
+    const interval=window.setInterval(refresh,30000);
+    return()=>{
+      window.clearInterval(interval);
+      if(refreshTimer.current)window.clearTimeout(refreshTimer.current);
+    };
   },[refresh]);
 
   useEffect(()=>{
