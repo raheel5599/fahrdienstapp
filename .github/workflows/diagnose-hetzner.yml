@@ -1,0 +1,22 @@
+name: Diagnose Fahrdienst server
+on:
+  push:
+    paths: [.github/workflows/diagnose-hetzner.yml]
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST || '167.233.32.243' }}
+          username: fpadmin
+          key: ${{ secrets.HETZNER_SSH_PRIVATE_KEY || secrets.HETZNER_SSH_KEY }}
+          port: 22
+          script: |
+            set -eu
+            docker ps -a --filter name=tariq-fahrdienst-app --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}'
+            docker logs --tail 30 tariq-fahrdienst-app 2>&1 || true
+            docker ps --filter name=caddy --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}'
+            docker inspect tariq-fahrdienst-app --format '{{json .NetworkSettings.Networks}}' || true
+            curl -sS -o /dev/null -w 'Public HTTP %{http_code}\n' --max-time 15 https://app.tariq-fahrdienst.de/ || true
