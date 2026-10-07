@@ -1,3 +1,4 @@
+import BusinessSettings from './components/BusinessSettings.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity, BadgeEuro, Bell, BookOpenCheck, Building2, CalendarDays, Car,
@@ -200,7 +201,9 @@ function App() {
             </div>
           </div>
 
-          {active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
+          {active === 'einstellungen' && can(PERMISSIONS.SETTINGS_MANAGE) ? (
+            <BusinessSettings />
+          ) : active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
             <UserManagement drivers={drivers} currentUser={user} />
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
             <ClientManagement data={clientData} />

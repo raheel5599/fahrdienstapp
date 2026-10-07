@@ -17,7 +17,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 
 | Priorität | Bereich | Tatsächlicher Stand / nächste Arbeit |
 | --- | --- | --- |
-| Hoch | Rechnungsdaten | Dokumentkopf enthält bisher fest eingetragene Firmenkontaktdaten, aber keine zentral gepflegte vollständige Firmenanschrift, Bankverbindung und Unternehmenskennungen. Einstellungen und vollständige Dokumentvorlage ergänzen. |
+| Hoch | Rechnungsdaten | Unternehmensprofil und Vorlage implementiert. Administrator muss die tatsächliche Anschrift, Bankverbindung, Kennungen und Hinweise eintragen; alte Belege ohne gespeichertes Profil behalten ihre bisherige Darstellung. |
 | Hoch | Kassenabrechnung | Einzelrechnungen und vertragliche Positionen sind vorhanden. Abrechnungsläufe/Sammelabrechnungen und Übermittlungsexporte an Abrechnungsstellen sind nicht implementiert. Anforderungen der verwendeten Abrechnungsstelle klären. |
 | Hoch | Storno und Korrektur | Server unterstützt einfache Statusänderungen. In der Oberfläche fehlt ein vollständiger, nachvollziehbarer Storno-/Korrekturprozess mit verknüpften Korrekturbelegen. |
 | Hoch | Dokumente | Verordnungen und Genehmigungen können als Angaben erfasst werden. Datei-Upload, geschützte Ablage, Vorschau und Zuordnung der Originalbelege fehlen. Das Dokumentenmodul ist ein Platzhalter. |
@@ -27,7 +27,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 | Mittel | Buchhaltung | Menü vorhanden, Inhalt ist Platzhalter. Einnahmen/Ausgaben, offene Posten, Zahlungsabgleich und Exporte fehlen. |
 | Mittel | Berichte | Menü vorhanden, Inhalt ist Platzhalter. Umsatz, Kilometer, Auslastung und Zeitraumauswertungen fehlen. |
 | Mittel | Nachrichten | Menü vorhanden, Inhalt ist Platzhalter. Fahrerhinweise/Push-Funktionen sind davon getrennt; kein vollständiges Büro-/Fahrer-Nachrichtensystem vorhanden. |
-| Mittel | Einstellungen | Menü vorhanden, Inhalt ist Platzhalter. Unternehmensdaten und zentrale Betriebsoptionen sind noch nicht pflegbar. |
+| Mittel | Einstellungen | Unternehmensdaten, Bankverbindung und Rechnungshinweise sind pflegbar. Weitere zentrale Betriebsoptionen fehlen noch. |
 | Mittel | Globale Suche / Benachrichtigungen | Die bisherigen nicht funktionierenden Kopfbedienelemente wurden entfernt. Datenübergreifende Suche und ein echtes Benachrichtigungszentrum fehlen. |
 | Mittel | Offlinebetrieb | Service Worker behandelt Installation und Benachrichtigungsklicks; er bietet keinen Offline-Datencache und keine sichere Warteschlange für Fahrtstatus. |
 | Mittel | Lange Listen | Lademechanismen laden viele Datensätze auf einmal. Pagination, Filter und Ladevolumen mit realistischen Datenmengen prüfen und ausbauen. |
@@ -43,7 +43,14 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 
 ## Sinnvolle Reihenfolge
 
-1. Vollständige Unternehmens-/Rechnungsvorlage und Originalbelege.
+1. Unternehmensprofil fachlich vervollständigen; Originalbelege ergänzen.
 2. Korrekturbelege, Privatfahrtenablauf und Abrechnungsläufe/Exporte.
 3. Historie, Filter, Buchhaltung und Berichte.
 4. Kommunikation, Einstellungen, echte Suche und danach optional Offlinebetrieb/GPS.
+
+## Unternehmensprofil ergänzt
+
+- Administratoren pflegen Unternehmensdaten pro Geschäftsbereich; Bürorollen können diese lesen, aber nicht ändern.
+- IBAN-Prüfsumme, BIC, E-Mail und IK werden serverseitig geprüft. Unvollständige Profile können als Entwurf gespeichert werden.
+- Neue Rechnungen und Quittungen benötigen Firmenname und vollständige Anschrift; die Angaben werden als Momentaufnahme im Beleg gespeichert. Alte Belege bleiben unverändert.
+- Rechnungsvorlage zeigt Anschrift, Kennungen, Bankverbindung, Leistungsdatum und eingetragene Zahlungs-/Steuerhinweise. Muster-Vorschau legt keine Rechnung an.

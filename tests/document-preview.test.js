@@ -12,3 +12,10 @@ test('receipt preview shows route and payment method without opening a popup',()
  const html=renderReceipt({receipt_number:'QU-1',amount:5,received_from:'Erika',from_address:'A & B',to_address:'C',payment_method:'card',receipt_type:'own_share'});
  assert.match(html,/QU-1/);assert.match(html,/A &amp; B/);assert.match(html,/Karte/);assert.doesNotMatch(html,/<script|window.print/);
 });
+test('issuer snapshot renders contact, bank and identifiers safely on both document types',()=>{
+ const issuer_snapshot={company_name:'Saved <Company>',street:'Example 1',postal_code:'12345',city:'Test',iban:'DE89370400440532013000',ik_number:'123456789',tax_number:'123/456',payment_note:'Please pay',tax_note:'Configured tax note'};
+ const html=renderInvoice({id:'i',issuer_snapshot,service_date:'2026-10-07'});
+ for(const value of ['Saved &lt;Company&gt;','Example 1','IBAN','123456789','123/456','Please pay','Configured tax note','7.10.2026'])assert.ok(html.includes(value),value);
+ assert.match(renderReceipt({issuer_snapshot}),/Saved &lt;Company&gt;/);
+ assert.match(renderInvoice({id:'legacy'}),/TARIQ Krankenfahrdienst/);
+});

@@ -1,3 +1,4 @@
+import {normalizeProfile,loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,tripServiceType} from "../_shared/contracts.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
@@ -27,6 +28,12 @@ Deno.serve(async(req:Request)=>{
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
 
+  if(body.action==="save_company_profile"){
+    if(m.role!=="admin")return out(403,{error:"Nur Administratoren dürfen Unternehmensdaten ändern."});
+    let profile;try{profile=normalizeProfile(body.profile)}catch(e){return out(400,{error:e.message})}
+    const {error}=await db.from("billing_profiles").upsert({...profile,business_unit_id:unit.id,updated_at:new Date().toISOString()},{onConflict:"business_unit_id"});
+    return error?out(400,{error:error.message}):out(200,{ok:true});
+  }
   if(body.action==="create_invoice"){
     const items=Array.isArray(body.items)?body.items:[];
     if(!items.length||items.length>100)return out(400,{error:"Rechnungspositionen fehlen."});
@@ -75,9 +82,10 @@ Deno.serve(async(req:Request)=>{
     const payerName=payerType==="insurer"?(insurer?.name||txt(body.payerName,180)):(txt(body.payerName,180)||customerName);
     if(!payerName)return out(400,{error:"Rechnungsempfänger fehlt."});
 
+    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
     const {data:invoice,error:ie}=await db.from("invoices").insert({
-      business_unit_id:unit.id,customer_id:customer?.id||null,insurer_id:insurer?.id||null,
-      payer_type:payerType,payer_name:payerName,payer_address:txt(body.payerAddress,300),
+      business_unit_id:unit.id,issuer_snapshot:issuer,service_date:txt(body.serviceDate,10),customer_id:customer?.id||null,insurer_id:insurer?.id||null,
+      payer_type:payerType,payer_name:payerName,payer_address:txt(body.payerAddress,300)||(payerType==="private"?customerAddress:null),
       customer_name:customerName,customer_address:customerAddress,status:"open",
       issue_date:txt(body.issueDate,10)||new Date().toISOString().slice(0,10),
       due_date:txt(body.dueDate,10),net_total:netTotal,vat_total:vatTotal,gross_total:grossTotal,
@@ -114,8 +122,9 @@ Deno.serve(async(req:Request)=>{
     const labels:any={city_trip:"Stadtfahrt",airport_trip:"Flughafenfahrt",courier_trip:"Kurierfahrt",own_share:"Eigener Anteil"};
     const receivedFrom=txt(body.receivedFrom,180);
     if(amount<=0||!receivedFrom)return out(400,{error:"Zahler und Betrag sind erforderlich."});
+    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
     const {data:receipt,error}=await db.from("receipts").insert({
-      business_unit_id:unit.id,customer_id:body.customerId||null,invoice_id:body.invoiceId||null,
+      business_unit_id:unit.id,issuer_snapshot:issuer,customer_id:body.customerId||null,invoice_id:body.invoiceId||null,
       received_from:receivedFrom,purpose:labels[receiptType],receipt_type:receiptType,amount,
       concession_number:txt(body.concessionNumber,120),from_address:txt(body.fromAddress,300),to_address:txt(body.toAddress,300),
       payment_method:method,payment_date:txt(body.paymentDate,10)||new Date().toISOString().slice(0,10),

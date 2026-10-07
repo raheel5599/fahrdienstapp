@@ -4,14 +4,15 @@ import fs from 'node:fs';
 import {transform} from 'esbuild';
 import * as contractRules from '../supabase/functions/_shared/contracts.js';
 import * as tariffRules from '../supabase/functions/_shared/tariffs.js';
-const rules={...contractRules,...tariffRules};
+import * as businessRules from '../supabase/functions/_shared/businessProfile.js';
+const rules={...contractRules,...tariffRules,...businessRules};
 const unit='unit',org='org',day='2026-10-07';
 const group={id:'group',business_unit_id:unit,active:true,contract_scope:'group',contract_group:'ersatzkassen',base_fee:2.4,price_per_km:2.1};
 function database(contracts=[]){
- const rows={app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts,customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,service_date:day,trip_type:'Dialyse',from_address:'A',to_address:'B'}],customers:[{id:'customer',first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',billable_km:15,insurer_amount:33.9,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
+ const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts,customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,service_date:day,trip_type:'Dialyse',from_address:'A',to_address:'B'}],customers:[{id:'customer',first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',billable_km:15,insurer_amount:33.9,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
  const writes=[];
  const db={auth:{getUser:async()=>({data:{user:{id:'user'}}})},from(table){let filters=[],single=false,patch=null,insert=null;
- const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},not(k,op,v){filters.push(r=>r[k]!==v);return q},order(){return q},limit(){return q},maybeSingle(){single=true;return q},single(){single=true;return q},update(v){patch=v;return q},insert(v){insert=v;return q},delete(){return q},then(resolve,reject){try{let data=(rows[table]||[]).filter(r=>filters.every(f=>f(r)));if(patch){writes.push({table,patch});data=data.map(r=>Object.assign(r,patch));}if(insert){writes.push({table,insert});data=[{id:'new',document_seq:1,...insert}];}return Promise.resolve({data:single?data[0]||null:data,error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject)}}};return q}};
+ const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},not(k,op,v){filters.push(r=>r[k]!==v);return q},order(){return q},limit(){return q},maybeSingle(){single=true;return q},single(){single=true;return q},update(v){patch=v;return q},upsert(v){insert=v;return q},insert(v){insert=v;return q},delete(){return q},then(resolve,reject){try{let data=(rows[table]||[]).filter(r=>filters.every(f=>f(r)));if(patch){writes.push({table,patch});data=data.map(r=>Object.assign(r,patch));}if(insert){writes.push({table,insert});data=[{id:'new',document_seq:1,...insert}];}return Promise.resolve({data:single?data[0]||null:data,error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject)}}};return q}};
  return {db,writes,rows};
 }
 async function handler(name,db){const source=fs.readFileSync(`supabase/functions/${name}/index.ts`,'utf8').replace(/^import .*;\n/gm,'');const {code}=await transform(source,{loader:'ts'});let handle;const Deno={env:{get:()=> 'test'},serve:f=>handle=f};new Function('Deno','createClient',...Object.keys(rules),code)(Deno,()=>db,...Object.values(rules));return handle;}
@@ -60,4 +61,29 @@ test('invalid tariff table produces no partial contract writes',async()=>{
  const setup=database([group]);
  const r=await call('manage-contracts',setup,{action:'save_contract',contractId:'group',contractName:'Ersatzkassen',contractScope:'group',contractGroup:'ersatzkassen',tariffLines:[...tariffLines,tariffLines[0]]});
  assert.equal(r.status,400);assert.equal(setup.writes.length,0);
+});
+test('only admins can save company data and scope comes from authenticated unit',async()=>{
+ const setup=database();setup.rows.memberships[0].role='office';
+ let r=await call('manage-finance',setup,{action:'save_company_profile',profile:{company_name:'Other'}});assert.equal(r.status,403);assert.equal(setup.writes.length,0);
+ setup.rows.memberships[0].role='admin';r=await call('manage-finance',setup,{action:'save_company_profile',profile:{company_name:'Test',business_unit_id:'foreign'}});assert.equal(r.status,200);assert.equal(setup.writes[0].insert.business_unit_id,unit);
+});
+test('new invoices require issuer address and capture issuer independently of later settings',async()=>{
+ const setup=database();const body={action:'create_invoice',payerName:'Test',serviceDate:day,items:[{description:'Fahrt',quantity:1,unitGross:10}]};
+ let r=await call('manage-finance',setup,body);assert.equal(r.status,200);
+ const invoice=setup.writes.find(w=>w.table==='invoices'&&w.insert).insert;assert.equal(invoice.service_date,day);assert.equal(invoice.issuer_snapshot.company_name,'Testunternehmen');
+ setup.rows.billing_profiles[0].company_name='Neuer Name';assert.equal(invoice.issuer_snapshot.company_name,'Testunternehmen');
+ setup.rows.billing_profiles=[];r=await call('manage-finance',setup,body);assert.equal(r.status,409);
+});
+test('invoice and receipt billing paths snapshot the issuer',async()=>{
+ const setup=database([{...group,service_type:'standard',tariff_lines:null}]);assert.equal((await call('manage-trip-billing',setup,{action:'invoice'})).status,200);
+ assert.equal(setup.writes.find(w=>w.table==='invoices'&&w.insert).insert.issuer_snapshot.street,'Teststraße 1');
+ assert.equal((await call('manage-finance',setup,{action:'create_receipt',amount:5,receivedFrom:'Test',receiptType:'own_share'})).status,200);
+ assert.equal(setup.writes.find(w=>w.table==='receipts'&&w.insert).insert.issuer_snapshot.company_name,'Testunternehmen');
+});
+test('profile rejects invalid banking and IK fields while permitting incomplete drafts',()=>{
+ assert.throws(()=>businessRules.normalizeProfile({iban:'DE00123456789012345678'}),/IBAN/);
+ assert.throws(()=>businessRules.normalizeProfile({ik_number:'123'}),/IK/);
+ assert.throws(()=>businessRules.normalizeProfile({bic:'123'}),/BIC/);
+ assert.equal(businessRules.normalizeProfile({iban:'DE89 3704 0044 0532 0130 00'}).iban,'DE89370400440532013000');
+ assert.equal(businessRules.normalizeProfile({}).company_name,null);
 });

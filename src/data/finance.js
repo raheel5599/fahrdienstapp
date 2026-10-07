@@ -7,3 +7,6 @@ export const createInvoice=input=>invoke({action:'create_invoice',...input});
 export const setInvoiceStatus=(invoiceId,status)=>invoke({action:'set_invoice_status',invoiceId,status});
 export const createReceipt=input=>invoke({action:'create_receipt',...input});
 export const cancelReceipt=receiptId=>invoke({action:'cancel_receipt',receiptId});
+
+export async function loadCompanyProfile(){const u=await unit();const {data,error}=await supabase.from("billing_profiles").select("*").eq("business_unit_id",u.id).maybeSingle();if(error)throw error;return data||{};}
+export const saveCompanyProfile=profile=>invoke({action:"save_company_profile",profile});
