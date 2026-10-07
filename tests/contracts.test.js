@@ -1,0 +1,16 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {chooseContract,composeBillingPosition,defaultTreatment,insurerGroup} from '../supabase/functions/_shared/contracts.js';
+const insurer={id:'tk',name:'Techniker Krankenkasse',active:true};
+const group={id:'group',active:true,contract_scope:'group',contract_group:'ersatzkassen',valid_from:'2026-01-01',valid_until:'2026-12-31'};
+const own={id:'own',active:true,insurer_id:'tk',contract_scope:'individual'};
+const day='2026-10-07';
+test('group contract covers TK, Barmer and BKK according to configured business rule',()=>{for(const name of ['Techniker','Barmer','BKK'])assert.equal(chooseContract([group],{...insurer,name},day).id,'group');});
+test('individual contract wins even if group is explicitly preferred',()=>assert.equal(chooseContract([group,own],insurer,day,'group').id,'own'));
+test('missing, inactive, expired or future contracts never allow billing',()=>{for(const contracts of [[],[{...group,active:false}],[{...group,valid_until:'2026-10-06'}],[{...group,valid_from:'2026-10-08'}]])assert.equal(chooseContract(contracts,insurer,day),null);});
+test('AOK and DAK cannot fall back to group even with wrongly configured group',()=>{for(const name of ['AOK Hessen','DAK Gesundheit'])assert.equal(chooseContract([group],{...insurer,name,contract_group:'ersatzkassen'},day),null);});
+test('AOK and DAK can use their own contracts',()=>{for(const name of ['AOK Hessen','DAK Gesundheit'])assert.equal(chooseContract([group,own],{...insurer,name},day).id,'own');});
+test('wrong insurer, inactive insurer and individual-only policy cannot fall back',()=>{assert.equal(chooseContract([own],{...insurer,id:'barmer'},day),null);assert.equal(chooseContract([group],{...insurer,active:false},day),null);assert.equal(chooseContract([group],{...insurer,contract_group:'individual'},day),null);});
+test('date boundaries are inclusive and expired individual falls back to valid group',()=>{assert.equal(chooseContract([group],insurer,'2026-01-01').id,'group');assert.equal(chooseContract([group],insurer,'2026-12-31').id,'group');assert.equal(chooseContract([{...own,valid_until:'2026-10-06'},group],insurer,day).id,'group');});
+test('positions replace placeholders, retain leading zero and reject incomplete code',()=>{assert.equal(composeBillingPosition('5130XX','52'),'513052');assert.equal(composeBillingPosition('5130XX','05'),'513005');assert.equal(composeBillingPosition('513052','52'),'513052');for(const code of ['', '5','Dialyse'])assert.equal(composeBillingPosition('5130XX',code),null);});
+test('known treatment defaults and explicit manual codes for other contract treatments',()=>{assert.equal(defaultTreatment('Dialyse'),'52');assert.equal(defaultTreatment('Arztfahrt'),'05');assert.equal(defaultTreatment('Chemotherapie'),'');assert.equal(insurerGroup({name:'AOK Hessen'}),'aok');});
