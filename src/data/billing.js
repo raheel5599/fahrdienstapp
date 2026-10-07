@@ -8,6 +8,7 @@ async function unit(){
   return data;
 }
 const round=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+export function composeBillingPosition(template,treatmentCode){const base=String(template||'').trim().toUpperCase();const code=String(treatmentCode||'').trim().toUpperCase();if(!base)return null;if(base.endsWith('XX'))return base.slice(0,-2)+(code||'');return code?base+code:base;}
 export async function loadBilling(){
   const u=await unit();
   const {data:cases,error}=await supabase.from('trip_billing_cases').select('*').eq('business_unit_id',u.id).order('created_at',{ascending:false});
@@ -38,7 +39,7 @@ export async function recalculateCase(item,input,context){
   if(!treatmentCode&&type.includes('dialyse'))treatmentCode='52';
   if(!treatmentCode&&(type.includes('chemo')||type.includes('strahl')))treatmentCode='30';
   const review=[];if(!item.insurance_id)review.push('Keine primäre Krankenversicherung.');if(item.insurance_id&&!item.insurer_id)review.push('Kostenträger nicht zugeordnet.');if(item.insurance_id&&!contract)review.push('Kein aktiver Vertrag.');if(contract&&contract.billing_method!=='flat_rate'&&Number(contract.price_per_km)>0&&km<=0)review.push('Abrechnungs-km fehlen.');if(!positionCode)review.push('Positionsnummer prüfen.');
-  const patch={billable_km:km,base_fee:round(base),km_rate:round(kmRate),waiting_minutes:waitingMinutes,waiting_amount:waiting,surcharge_amount:round(surcharge),wheelchair_surcharge_applied:wheelchair&&surcharge>0,gross_amount:gross,own_share_amount:round(own),insurer_amount:round(gross-own),own_share_required:own>0,position_code:positionCode||null,treatment_code:treatmentCode||null,billing_position:positionCode?(positionCode+treatmentCode):null,billing_status:review.length?'review':'ready',review_message:review.join(' '),calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  const patch={billable_km:km,base_fee:round(base),km_rate:round(kmRate),waiting_minutes:waitingMinutes,waiting_amount:waiting,surcharge_amount:round(surcharge),wheelchair_surcharge_applied:wheelchair&&surcharge>0,gross_amount:gross,own_share_amount:round(own),insurer_amount:round(gross-own),own_share_required:own>0,position_code:positionCode||null,treatment_code:treatmentCode||null,billing_position:composeBillingPosition(positionCode,treatmentCode),billing_status:review.length?'review':'ready',review_message:review.join(' '),calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
   const {data,error}=await supabase.from('trip_billing_cases').update(patch).eq('id',item.id).select('*').single();if(error)throw error;return data;
 }
 export async function createCaseInvoice(item,context){
