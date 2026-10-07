@@ -35,10 +35,10 @@ export default function ClientEditor({client,onClose,onSaved}){
 
   return <div className="modal-layer">
     <button className="modal-backdrop" onClick={onClose} aria-label="Schließen"/>
-    <form className="modal-card client-editor" onSubmit={submit}>
+    <form role="dialog" aria-modal="true" aria-label={client?'Kunde bearbeiten':'Kunde anlegen'} className="modal-card client-editor" onSubmit={submit}>
       <div className="modal-head">
         <div><p className="eyebrow">KUNDENVERWALTUNG</p><h2>{client?'Kunde bearbeiten':'Kunde anlegen'}</h2></div>
-        <button type="button" className="icon-button" onClick={onClose}><X/></button>
+        <button type="button" className="icon-button" aria-label="Schließen" onClick={onClose}><X/></button>
       </div>
 
       <div className="form-section-title">Stammdaten</div>

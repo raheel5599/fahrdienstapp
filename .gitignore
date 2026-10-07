@@ -3,3 +3,4 @@ dist/
 .env
 .env.*
 supabase/.temp/
+test-results/

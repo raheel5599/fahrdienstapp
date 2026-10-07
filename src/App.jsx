@@ -68,6 +68,7 @@ function StatusPill({ status }) {
 
 function App() {
   const { session, loading, login, logout, can } = useAuthSession();
+  const [financeTab, setFinanceTab] = useState('invoices');
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
@@ -174,11 +175,11 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-button menu-button" onClick={() => setMobileNav(true)}><Menu /></button>
-            <div className="searchbox"><Search size={18}/><input placeholder="Suche Kunden, Fahrten, Rechnungen ..." /></div>
+            <button className="icon-button menu-button" aria-label="Menü öffnen" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu /></button>
+            <div className="topbar-brand">TARIQ · Verwaltung</div>
           </div>
           <div className="topbar-actions">
-            <button className="icon-button bell"><Bell /><span>3</span></button>
+
             <div className="role-button">
               <CircleUserRound size={26}/>
               <span><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></span>
@@ -204,7 +205,7 @@ function App() {
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
             <ClientManagement data={clientData} />
           ) : active === 'rechnungen' && can(PERMISSIONS.INVOICES_MANAGE) ? (
-            <InvoiceManagement data={financeData} clients={clientData.clients} contracts={contractData} />
+            <div><div className="module-tabs finance-tabs" aria-label="Finanzdokumente"><button className={financeTab==='invoices'?'active':''} onClick={()=>setFinanceTab('invoices')}>Rechnungen</button><button className={financeTab==='receipts'?'active':''} onClick={()=>setFinanceTab('receipts')}>Quittungen</button></div>{financeTab==='invoices'?<InvoiceManagement data={financeData} clients={clientData.clients} contracts={contractData} />:<ReceiptManagement data={financeData} clients={clientData.clients} />}</div>
           ) : active === 'abrechnung' && can(PERMISSIONS.BILLING_MANAGE) ? (
             <BillingManagement data={billingData} onFinanceRefresh={financeData.refresh} />
           ) : active === 'kassen' && can(PERMISSIONS.CONTRACTS_MANAGE) ? (
@@ -286,7 +287,7 @@ function ModulePlaceholder({ active, onNewTrip }) {
       <p>{content[1]}</p>
       <div className="placeholder-actions">
         <button className="primary-button" onClick={onNewTrip}><Plus size={18}/> Neue Fahrt anlegen</button>
-        <button className="secondary-button"><Settings size={18}/> Modul konfigurieren</button>
+        <span className="unfinished-module">Noch nicht umgesetzt</span>
       </div>
     </section>
   );
