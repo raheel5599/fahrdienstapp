@@ -5,7 +5,27 @@ mkdir -p "$APP_DIR"
 tar -xzf /tmp/tariq-fahrdienst-app.tar.gz -C "$APP_DIR"
 docker network inspect fahrschulpilot_web >/dev/null 2>&1 || docker network create fahrschulpilot_web
 cd "$APP_DIR"
-docker compose -f compose.production.yml up -d --build --remove-orphans
+# Preserve the existing Compose project/service so the named app container can
+# be updated without colliding with it or removing sibling API containers.
+APP_PROJECT=tariq-fahrdienst-app
+APP_SERVICE=app
+if docker inspect tariq-fahrdienst-app >/dev/null 2>&1; then
+  APP_PROJECT=$(docker inspect tariq-fahrdienst-app --format '{{index .Config.Labels "com.docker.compose.project"}}')
+  APP_SERVICE=$(docker inspect tariq-fahrdienst-app --format '{{index .Config.Labels "com.docker.compose.service"}}')
+  [[ "$APP_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ && "$APP_SERVICE" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || {
+    echo 'App-Container hat keine gültige Compose-Zuordnung. Deployment abgebrochen.'; exit 1;
+  }
+fi
+APP_COMPOSE=$(mktemp /tmp/fahrdienst-compose.XXXXXX.json)
+trap 'rm -f "$APP_COMPOSE"' EXIT
+docker compose -f compose.production.yml config --format json | python3 -c '
+import json,sys
+config=json.load(sys.stdin)
+config["name"]=sys.argv[1]
+config["services"]={sys.argv[2]:config["services"]["app"]}
+json.dump(config,sys.stdout)
+' "$APP_PROJECT" "$APP_SERVICE" > "$APP_COMPOSE"
+docker compose -p "$APP_PROJECT" -f "$APP_COMPOSE" up -d --build "$APP_SERVICE"
 APP_IP=$(docker inspect tariq-fahrdienst-app --format '{{(index .NetworkSettings.Networks "fahrschulpilot_web").IPAddress}}')
 for attempt in $(seq 1 15); do
   if curl --fail --silent --show-error "http://$APP_IP/" -o /tmp/fahrdienst-health.html; then break; fi
