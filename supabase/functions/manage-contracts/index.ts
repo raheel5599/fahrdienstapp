@@ -1,3 +1,4 @@
+import {normalizeTariffLines} from "../_shared/tariffs.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
@@ -40,7 +41,14 @@ Deno.serve(async(req:Request)=>{
     const {data:insurer}=await db.from("health_insurers").select("id").eq("id",body.insurerId||"00000000-0000-0000-0000-000000000000").eq("organization_id",p.organization_id).maybeSingle();
     if(scope==="individual"&&!insurer) return out(404,{error:"Krankenkasse nicht gefunden."});
     const data={business_unit_id:unit.id,insurer_id:scope==="individual"?body.insurerId:null,contract_scope:scope,contract_group:group,applies_to_group:group,contract_number:txt(body.contractNumber),contract_name:txt(body.contractName),valid_from:txt(body.validFrom),valid_until:txt(body.validUntil),billing_method:["individual","flat_rate","mixed"].includes(body.billingMethod)?body.billingMethod:"individual",base_fee:num(body.baseFee),price_per_km:num(body.pricePerKm),waiting_per_hour:num(body.waitingPerHour),wheelchair_surcharge:num(body.wheelchairSurcharge),copay_min:num(body.copayMin||5),copay_max:num(body.copayMax||10),copay_percent:num(body.copayPercent||10),active:body.active!==false,notes:txt(body.notes),updated_at:new Date().toISOString()};
-    const q=body.contractId?db.from("payer_contracts").update(data).eq("id",body.contractId).eq("business_unit_id",unit.id):db.from("payer_contracts").insert(data);
+    let tariffLines;
+    if(body.tariffLines!==undefined){
+      try{tariffLines=normalizeTariffLines(body.tariffLines)}catch(e){return out(400,{error:e.message})}
+      if(body.active!==false&&!tariffLines.some(x=>x.active))return out(400,{error:"Mindestens eine aktive Tarifposition hinterlegen."});
+    }
+    if(body.serviceType!==undefined&&!['standard','wheelchair'].includes(body.serviceType))return out(400,{error:"Leistungsbereich ungültig."});
+    const payload={...data,...(tariffLines!==undefined?{tariff_lines:tariffLines}:{}),...(body.serviceType!==undefined||!body.contractId?{service_type:body.serviceType||"standard"}:{})};
+    const q=body.contractId?db.from("payer_contracts").update(payload).eq("id",body.contractId).eq("business_unit_id",unit.id):db.from("payer_contracts").insert(payload);
     const {error}=await q; return error?out(400,{error:error.message}):out(200,{ok:true});
   }
 

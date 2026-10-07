@@ -1,4 +1,5 @@
-import {resolveContract,composeBillingPosition,defaultTreatment} from "../_shared/contracts.js";
+import {calculateTariff} from "../_shared/tariffs.js";
+import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
@@ -242,7 +243,7 @@ Deno.serve(async(req:Request)=>{
             const {data}=await db.from("health_insurers").select("*").eq("organization_id",profile.organization_id).ilike("name",insurance.insurer_name).eq("active",true).maybeSingle();
             insurer=data;
           }
-          contract=await resolveContract(db,unit.id,profile.organization_id,insurer?.id,updated.service_date,insurance.tariff_id);
+          contract=await resolveContract(db,unit.id,profile.organization_id,insurer?.id,updated.service_date,insurance.tariff_id,tripServiceType(updated));
 
         }
 
@@ -251,27 +252,23 @@ Deno.serve(async(req:Request)=>{
 
         const exempt=Boolean(insurance?.exempt) && (!insurance?.exempt_until || insurance.exempt_until>=updated.service_date);
         const ownShare=exempt?0:Math.max(0,Number(insurance?.copay||0));
-        const wheelchair=String(updated.customer_mobility||"")==="wheelchair";
-        const baseFee=Math.max(0,Number(contract?.base_fee||0));
-        const kmRate=Math.max(0,Number(contract?.price_per_km||0));
-        const surcharge=wheelchair?Math.max(0,Number(contract?.wheelchair_surcharge||0)):0;
-        const needsKm=Boolean(contract && contract.billing_method!=="flat_rate" && kmRate>0);
-        const gross=contract && (!needsKm || defaultKm!=null)
-          ? Math.round((baseFee+(defaultKm||0)*kmRate+surcharge+Number.EPSILON)*100)/100
-          : 0;
-        const insurerAmount=Math.max(0,Math.round((gross-ownShare+Number.EPSILON)*100)/100);
-
-        let positionCode=null;
-        if(contract){const {data:rate}=await db.from("contract_rates").select("position_code").eq("contract_id",contract.id).eq("active",true).not("position_code","is",null).order("sort_order").limit(1).maybeSingle();positionCode=rate?.position_code||null;}
+        let legacyRates=[];
+        if(contract?.tariff_lines==null&&contract){const {data:rates}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");legacyRates=rates||[];}
+        const journeyKind=updated.series_id?"series":"single";
+        const tariff=calculateTariff(contract,legacyRates,{date:updated.service_date,km:defaultKm,waitingMinutes:0,treatmentCode:defaultTreatment(updated.trip_type),vehicleClass:"unconfirmed",journeyKind,area:"unconfirmed"});
+        const {base:baseFee,kmRate,surcharge,gross}=tariff;
+        const actualOwnShare=ownShare;
+        const insurerAmount=Math.max(0,Math.round((gross-actualOwnShare+Number.EPSILON)*100)/100);
+        const positionCode=tariff.lines.find(l=>l.kind==="km")?.template||tariff.lines[0]?.template||legacyRates[0]?.position_code||null;
         const treatmentCode=defaultTreatment(updated.trip_type)||null;
         const billingPosition=composeBillingPosition(positionCode,treatmentCode);
-        const review:string[]=[];
+        const review:string[]=[...tariff.review];
         if(!insurance) review.push("Keine primäre Krankenversicherung hinterlegt.");
         if(insurance && !insurer) review.push("Krankenkasse konnte keinem Kostenträger zugeordnet werden.");
         if(insurance && !contract) review.push("Kein aktiver Kassenvertrag gefunden.");
-        if(needsKm && defaultKm==null) review.push("Abrechnungs-km fehlen und müssen geprüft werden.");
+
         if(insurance && !exempt && ownShare===0) review.push("Eigenen Anteil prüfen.");
-        if(!billingPosition)review.push("Vollständige Positionsnummer und Fahrtart-Code prüfen.");
+
         const ready=review.length===0;
 
         await db.from("trip_billing_cases").insert({
@@ -279,8 +276,9 @@ Deno.serve(async(req:Request)=>{
           insurance_id:insurance?.id||null,insurer_id:insurer?.id||null,contract_id:contract?.id||null,
           position_code:positionCode,treatment_code:treatmentCode,billing_position:billingPosition,billing_status:!contract?"blocked":ready?"ready":"review",payer_type:insurance?"insurer":"private",
           billable_km:defaultKm,base_fee:baseFee,km_rate:kmRate,surcharge_amount:surcharge,
-          gross_amount:gross,own_share_amount:ownShare,insurer_amount:insurerAmount,
-          own_share_required:ownShare>0,review_message:review.join(" "),calculated_at:new Date().toISOString()
+          tariff_breakdown:tariff.lines,billing_vehicle_class:"unconfirmed",billing_journey_kind:journeyKind,billing_area:"unconfirmed",
+          gross_amount:gross,own_share_amount:actualOwnShare,insurer_amount:insurerAmount,
+          own_share_required:actualOwnShare>0,review_message:review.join(" "),calculated_at:new Date().toISOString()
         });
       }
     }
@@ -304,4 +302,5 @@ Deno.serve(async(req:Request)=>{
 
   return reply(400,{error:"Unbekannte Aktion."});
 });
+
 

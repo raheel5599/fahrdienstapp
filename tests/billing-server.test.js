@@ -2,7 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {transform} from 'esbuild';
-import * as rules from '../supabase/functions/_shared/contracts.js';
+import * as contractRules from '../supabase/functions/_shared/contracts.js';
+import * as tariffRules from '../supabase/functions/_shared/tariffs.js';
+const rules={...contractRules,...tariffRules};
 const unit='unit',org='org',day='2026-10-07';
 const group={id:'group',business_unit_id:unit,active:true,contract_scope:'group',contract_group:'ersatzkassen',base_fee:2.4,price_per_km:2.1};
 function database(contracts=[]){
@@ -20,3 +22,42 @@ test('server recalculates against group and generates correct AOK-style position
 test('server blocks recalculation without contract and incomplete template stays review',async()=>{let setup=database([]);let r=await call('manage-trip-billing',setup,{action:'recalculate'});assert.equal(r.body.case.billing_status,'blocked');setup=database([group]);r=await call('manage-trip-billing',setup,{action:'recalculate',treatmentCode:''});assert.equal(r.body.case.billing_status,'review');assert.equal(r.body.case.billing_position,null);});
 test('valid case creates insurer invoice and links billing case',async()=>{const setup=database([group]);const r=await call('manage-trip-billing',setup,{action:'invoice'});assert.equal(r.status,200);assert.ok(setup.writes.some(w=>w.table==='invoices'));assert.ok(setup.writes.some(w=>w.table==='trip_billing_cases'&&w.patch?.billing_status==='invoiced'));});
 test('manual insurer invoice cannot bypass missing contract',async()=>{const setup=database([]);const r=await call('manage-finance',setup,{action:'create_invoice',payerType:'insurer',insurerId:'tk',serviceDate:day,items:[{description:'Krankenfahrt',quantity:1,unitGross:30}]});assert.equal(r.status,409);assert.equal(setup.writes.length,0);});
+
+const tariffLines=[
+ {id:'base',position_code:'611200',label:'Grundpauschale',kind:'base',unit:'ride',price:2.4,vehicle_class:'mietwagen',journey_kind:'single'},
+ {id:'km',position_code:'613000',label:'Besetzt-km',kind:'km',unit:'km',price:2.35,vehicle_class:'mietwagen',journey_kind:'single'},
+ {id:'short',position_code:'612900',label:'Kurzstrecke',kind:'surcharge',unit:'ride',price:2.2,vehicle_class:'mietwagen',journey_kind:'single',max_km:5}
+];
+test('server uses every matching tariff price and creates separate invoice items plus copay deduction',async()=>{
+ const setup=database([{...group,tariff_lines:tariffLines}]);
+ const r=await call('manage-trip-billing',setup,{action:'recalculate',billableKm:4,vehicleClass:'mietwagen',journeyKind:'single',ownShareAmount:5});
+ assert.equal(r.status,200);assert.equal(r.body.case.gross_amount,14);assert.equal(r.body.case.insurer_amount,9);assert.equal(r.body.case.tariff_breakdown.length,3);
+ assert.deepEqual(r.body.case.tariff_breakdown.map(l=>l.position_code),['611200','613000','612900']);
+ const i=await call('manage-trip-billing',setup,{action:'invoice'});assert.equal(i.status,200);
+ const lines=setup.writes.find(w=>w.table==='invoice_items').insert;assert.equal(lines.length,4);assert.equal(lines[1].quantity,4);assert.equal(lines[1].unit_gross,2.35);assert.equal(lines[3].unit_gross,-5);assert.equal(lines.reduce((s,l)=>s+l.gross_total,0),9);
+});
+test('changed tariff prices invalidate a ready case before invoice',async()=>{
+ const setup=database([{...group,tariff_lines:tariffLines}]);await call('manage-trip-billing',setup,{action:'recalculate',billableKm:4,vehicleClass:'mietwagen',journeyKind:'single'});
+ setup.rows.payer_contracts[0].tariff_lines=tariffLines.map(l=>({...l,price:l.kind==='km'?9:l.price}));
+ const r=await call('manage-trip-billing',setup,{action:'invoice'});assert.equal(r.status,409);assert.match(r.body.error,/Tarifpositionen/);
+});
+test('wheelchair billing cannot use a standard contract even with stale ready status',async()=>{
+ const setup=database([group]);setup.rows.trips[0].customer_mobility='wheelchair';
+ const r=await call('manage-trip-billing',setup,{action:'invoice'});assert.equal(r.status,409);
+ const recalc=await call('manage-trip-billing',setup,{action:'recalculate'});assert.equal(recalc.body.case.billing_status,'blocked');assert.equal(recalc.body.case.gross_amount,0);
+});
+test('wheelchair recalculation uses its own contract and no normal wheelchair surcharge',async()=>{
+ const setup=database([group,{...group,id:'wheel',service_type:'wheelchair',wheelchair_surcharge:999,tariff_lines:tariffLines}]);setup.rows.trips[0].customer_mobility='wheelchair';
+ const r=await call('manage-trip-billing',setup,{action:'recalculate',billableKm:4,vehicleClass:'mietwagen',journeyKind:'single'});
+ assert.equal(r.body.case.contract_id,'wheel');assert.equal(r.body.case.gross_amount,14);assert.equal(r.body.case.wheelchair_surcharge_applied,false);
+});
+test('contract saves its whole normalized tariff table in one write',async()=>{
+ const setup=database([group]);
+ const r=await call('manage-contracts',setup,{action:'save_contract',contractId:'group',contractName:'Ersatzkassen',contractScope:'group',contractGroup:'ersatzkassen',serviceType:'wheelchair',tariffLines});
+ assert.equal(r.status,200);assert.equal(setup.writes.length,1);assert.equal(setup.writes[0].patch.service_type,'wheelchair');assert.equal(setup.writes[0].patch.tariff_lines.length,3);
+});
+test('invalid tariff table produces no partial contract writes',async()=>{
+ const setup=database([group]);
+ const r=await call('manage-contracts',setup,{action:'save_contract',contractId:'group',contractName:'Ersatzkassen',contractScope:'group',contractGroup:'ersatzkassen',tariffLines:[...tariffLines,tariffLines[0]]});
+ assert.equal(r.status,400);assert.equal(setup.writes.length,0);
+});

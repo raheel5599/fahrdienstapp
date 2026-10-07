@@ -1,4 +1,5 @@
-import {resolveContract,composeBillingPosition,defaultTreatment} from "../_shared/contracts.js";
+import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
+import {calculateTariff,invoiceTariffItems,tariffFingerprint} from "../_shared/tariffs.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 const H={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
@@ -34,21 +35,32 @@ Deno.serve(async(req)=>{
      if(insurance.insurer_code){const {data}=await db.from("health_insurers").select("id").eq("organization_id",p.organization_id).eq("ik_number",insurance.insurer_code).eq("active",true).maybeSingle();insurerId=data?.id;}
      if(!insurerId&&insurance.insurer_name){const {data}=await db.from("health_insurers").select("id").eq("organization_id",p.organization_id).ilike("name",insurance.insurer_name).eq("active",true).maybeSingle();insurerId=data?.id;}
    }
-   const contract=await resolveContract(db,unit.id,p.organization_id,insurerId,trip.service_date,c.contract_id);
+   const serviceType=tripServiceType(trip);
+   const contract=await resolveContract(db,unit.id,p.organization_id,insurerId,trip.service_date,c.contract_id,serviceType);
    let pos=String(body.positionCode ?? (contract?.id===c.contract_id?c.position_code:"") ?? "").trim()||null;
-   if(!pos&&contract?.id){const {data:r}=await db.from("contract_rates").select("position_code").eq("contract_id",contract.id).eq("active",true).not("position_code","is",null).order("sort_order").limit(1).maybeSingle();pos=r?.position_code||null}
+   let legacyRates=[];
+   if(contract?.id&&contract.tariff_lines==null){const {data:r,error}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");if(error)return out(400,{error:error.message});legacyRates=r||[];if(!pos)pos=legacyRates[0]?.position_code||null}
    const lower=String(trip.trip_type||"").toLowerCase();
    const treatment=String(body.treatmentCode ?? c.treatment_code ?? defaultTreatment(lower)).trim()||null;
+   const rawKm=Number(body.billableKm??c.billable_km??0),rawWait=Number(body.waitingMinutes??c.waiting_minutes??0),rawOwn=Number(body.ownShareAmount??c.own_share_amount??0);
+   if(![rawKm,rawWait,rawOwn].every(x=>Number.isFinite(x)&&x>=0))return out(400,{error:"Kilometer, Wartezeit und Eigenanteil müssen mindestens 0 sein."});
+   const km=cash(rawKm),wait=Math.round(rawWait);
+   const vehicleClass=body.vehicleClass??c.billing_vehicle_class??'unconfirmed';
+   const journeyKind=body.journeyKind??c.billing_journey_kind??(trip.series_id?'series':'single');
+   const area=body.area??c.billing_area??'unconfirmed';
+   const meterAmount=body.meterAmount??c.meter_amount;
+   if(!['unconfirmed','taxi','mietwagen'].includes(vehicleClass)||!['single','series'].includes(journeyKind)||!['unconfirmed','inside','outside'].includes(area))return out(400,{error:"Abrechnungsart ist ungültig."});
+   if(meterAmount!=null&&meterAmount!==''&&(!Number.isFinite(Number(meterAmount))||Number(meterAmount)<0))return out(400,{error:"Taxameterbetrag ist ungültig."});
+   let tariff;
+   try{tariff=calculateTariff(contract,legacyRates,{date:trip.service_date,km,waitingMinutes:wait,treatmentCode:treatment,positionCode:pos,vehicleClass,journeyKind,area,meterAmount})}catch(e){return out(400,{error:e.message})}
+   const {gross,base,kmRate:rate,waiting,surcharge}=tariff;
+   if(contract?.tariff_lines!=null)pos=tariff.lines.find(l=>l.kind==='km')?.template||tariff.lines[0]?.template||null;
    const billingPosition=composeBillingPosition(pos,treatment);
-   const km=cash(body.billableKm??c.billable_km),wait=Math.max(0,Math.round(Number(body.waitingMinutes??c.waiting_minutes)||0));
-   const base=cash(contract?.base_fee??c.base_fee),rate=cash(contract?.price_per_km??c.km_rate);
-   const waiting=cash((Number(contract?.waiting_per_hour||0)*wait)/60);
-   const wheelchair=trip.customer_mobility==="wheelchair",surcharge=wheelchair?cash(contract?.wheelchair_surcharge||c.surcharge_amount):0;
-   const gross=cash(base+km*rate+waiting+surcharge);
    const exempt=Boolean(insurance?.exempt)&&(!insurance?.exempt_until||insurance.exempt_until>=trip.service_date);
    const own=exempt?0:Math.min(gross,cash(body.ownShareAmount??c.own_share_amount));
-   const review=[]; if(!insurance)review.push("Keine primäre Krankenversicherung."); if(insurance&&!insurerId)review.push("Kostenträger nicht zugeordnet."); if(insurance&&!contract)review.push("Kein aktiver Vertrag."); if(contract&&contract.billing_method!=="flat_rate"&&Number(contract.price_per_km)>0&&km<=0)review.push("Abrechnungs-km fehlen."); if(!billingPosition)review.push("Vollständige Positionsnummer und zweistelligen Fahrtart-Code prüfen.");
-   const patch={insurance_id:insurance?.id||null,insurer_id:insurerId||null,contract_id:contract?.id||null,billable_km:km,base_fee:base,km_rate:rate,waiting_minutes:wait,waiting_amount:waiting,surcharge_amount:surcharge,wheelchair_surcharge_applied:wheelchair&&surcharge>0,gross_amount:gross,own_share_amount:own,insurer_amount:cash(gross-own),own_share_required:own>0,position_code:pos,treatment_code:treatment,billing_position:billingPosition,billing_status:!contract?"blocked":review.length?"review":"ready",review_message:review.join(" "),calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+   if(c.receipt_id&&cash(c.own_share_amount)!==own)return out(409,{error:"Quittierter Eigenanteil kann nicht verändert werden."});
+   const review=[...tariff.review]; if(!insurance)review.push("Keine primäre Krankenversicherung."); if(insurance&&!insurerId)review.push("Kostenträger nicht zugeordnet."); if(insurance&&!contract)review.push(serviceType==='wheelchair'?"Kein gültiger eigener Rollstuhlvertrag.":"Kein aktiver Vertrag.");
+   const patch={insurance_id:insurance?.id||null,insurer_id:insurerId||null,contract_id:contract?.id||null,billable_km:km,base_fee:base,km_rate:rate,waiting_minutes:wait,waiting_amount:waiting,surcharge_amount:surcharge,wheelchair_surcharge_applied:false,gross_amount:gross,own_share_amount:own,insurer_amount:cash(gross-own),own_share_required:own>0,position_code:pos,treatment_code:treatment,billing_position:billingPosition,tariff_breakdown:tariff.lines,billing_vehicle_class:vehicleClass,billing_journey_kind:journeyKind,billing_area:area,meter_amount:meterAmount==null||meterAmount===''?null:Number(meterAmount),billing_status:!contract?"blocked":review.length?"review":"ready",review_message:review.join(" "),calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
    const {data,error}=await db.from("trip_billing_cases").update(patch).eq("id",c.id).select("*").single();
    return error?out(400,{error:error.message}):out(200,{ok:true,case:data});
  }
@@ -61,16 +73,22 @@ Deno.serve(async(req)=>{
  }
 
  if(body.action==="invoice"){
-   const contract=await resolveContract(db,unit.id,p.organization_id,c.insurer_id,trip.service_date,c.contract_id);
+   const contract=await resolveContract(db,unit.id,p.organization_id,c.insurer_id,trip.service_date,c.contract_id,tripServiceType(trip));
    if(!contract)return out(409,{error:"Kein gültiger Kassenvertrag am Fahrtag. Abrechnung gesperrt."});
    if(contract.id!==c.contract_id)return out(409,{error:"Vertragszuordnung hat sich geändert. Fahrt zuerst neu berechnen."});
+   if(contract.tariff_lines!=null){
+     let current;
+     try{current=calculateTariff(contract,[],{date:trip.service_date,km:c.billable_km,waitingMinutes:c.waiting_minutes,treatmentCode:c.treatment_code,vehicleClass:c.billing_vehicle_class,journeyKind:c.billing_journey_kind,area:c.billing_area,meterAmount:c.meter_amount})}catch(e){return out(409,{error:e.message})}
+     if(current.review.length||tariffFingerprint(current.lines)!==tariffFingerprint(c.tariff_breakdown)||current.gross!==cash(c.gross_amount))return out(409,{error:"Tarifpositionen wurden geändert oder fehlen. Fahrt zuerst neu berechnen."});
+   }
    if(!composeBillingPosition(c.position_code,c.treatment_code)||composeBillingPosition(c.position_code,c.treatment_code)!==c.billing_position)return out(409,{error:"Positionsnummer zuerst vollständig prüfen."});
    if(c.invoice_id)return out(409,{error:"Rechnung bereits vorhanden."}); if(c.billing_status!=="ready")return out(409,{error:"Abrechnungsfall zuerst vollständig prüfen."}); if(!c.insurer_id||cash(c.insurer_amount)<=0)return out(400,{error:"Kein Kassenbetrag vorhanden."});
    const [{data:customer},{data:insurer}]=await Promise.all([db.from("customers").select("*").eq("id",c.customer_id).maybeSingle(),db.from("health_insurers").select("*").eq("id",c.insurer_id).maybeSingle()]); if(!customer||!insurer)return out(400,{error:"Kunde oder Krankenkasse fehlt."});
    const amount=cash(c.insurer_amount),desc=[c.billing_position?"Pos. "+c.billing_position:null,trip.trip_type,trip.service_date,trip.from_address+" → "+trip.to_address].filter(Boolean).join(" · ");
    const {data:i,error}=await db.from("invoices").insert({business_unit_id:unit.id,customer_id:c.customer_id,insurer_id:c.insurer_id,payer_type:"insurer",payer_name:insurer.name,customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),customer_address:[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),status:"open",issue_date:new Date().toISOString().slice(0,10),net_total:amount,vat_total:0,gross_total:amount,created_by:user.id}).select("id,document_seq").single();
    if(error||!i)return out(400,{error:error?.message||"Rechnung fehlgeschlagen."}); const no="RE-"+new Date().getFullYear()+"-"+String(i.document_seq).padStart(5,"0"); await db.from("invoices").update({invoice_number:no}).eq("id",i.id);
-   const {error:ie}=await db.from("invoice_items").insert({invoice_id:i.id,trip_id:trip.id,description:desc,quantity:1,unit:"Fahrt",unit_gross:amount,vat_rate:0,net_total:amount,vat_total:0,gross_total:amount}); if(ie){await db.from("invoices").delete().eq("id",i.id);return out(400,{error:ie.message})}
+   const positions=c.tariff_breakdown?.length?invoiceTariffItems(c.tariff_breakdown,cash(c.own_share_amount),trip,i.id):[{invoice_id:i.id,trip_id:trip.id,description:desc,quantity:1,unit:"Fahrt",unit_gross:amount,vat_rate:0,net_total:amount,vat_total:0,gross_total:amount}];
+   const {error:ie}=await db.from("invoice_items").insert(positions); if(ie){await db.from("invoices").delete().eq("id",i.id);return out(400,{error:ie.message})}
    await db.from("trip_billing_cases").update({invoice_id:i.id,billing_status:"invoiced",updated_at:new Date().toISOString()}).eq("id",c.id); return out(200,{ok:true,invoiceNumber:no});
  }
  return out(400,{error:"Unbekannte Aktion."});

@@ -1,4 +1,4 @@
-import {resolveContract} from "../_shared/contracts.js";
+import {resolveContract,tripServiceType} from "../_shared/contracts.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
@@ -59,15 +59,15 @@ Deno.serve(async(req:Request)=>{
       const dates=[];
       for(const item of items){
         if(item.tripId){
-          const {data:trip}=await db.from("trips").select("service_date,business_unit_id").eq("id",item.tripId).eq("business_unit_id",unit.id).maybeSingle();
+          const {data:trip}=await db.from("trips").select("service_date,business_unit_id,customer_mobility").eq("id",item.tripId).eq("business_unit_id",unit.id).maybeSingle();
           if(!trip)return out(400,{error:"Fahrt nicht gefunden."});
-          dates.push(trip.service_date);
+          dates.push({date:trip.service_date,serviceType:tripServiceType(trip)});
         }else{
           if(!/^\d{4}-\d{2}-\d{2}$/.test(body.serviceDate||""))return out(400,{error:"Leistungsdatum für Vertragsprüfung fehlt."});
-          dates.push(body.serviceDate);
+          dates.push({date:body.serviceDate,serviceType:body.serviceType==="wheelchair"?"wheelchair":"standard"});
         }
       }
-      for(const date of dates){if(!await resolveContract(db,unit.id,p.organization_id,insurer.id,date))return out(409,{error:"Kein gültiger Kassenvertrag am Leistungsdatum. Abrechnung gesperrt."});}
+      for(const entry of dates){if(!await resolveContract(db,unit.id,p.organization_id,insurer.id,entry.date,undefined,entry.serviceType))return out(409,{error:"Kein gültiger Kassenvertrag am Leistungsdatum. Abrechnung gesperrt."});}
     }
     const customerName=customer?[customer.first_name,customer.last_name].filter(Boolean).join(" "):txt(body.customerName,180);
     const customerAddress=customer?[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", "):txt(body.customerAddress,300);
