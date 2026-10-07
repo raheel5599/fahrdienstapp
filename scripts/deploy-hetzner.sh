@@ -18,23 +18,15 @@ CADDY_CONTAINER=$(docker ps --filter name=^/fahrschulpilot-caddy-1$ --format '{{
 # Use the actual mounted config, never guess a server path.
 CADDY_CONFIG=$(docker inspect "$CADDY_CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}')
 [ -f "$CADDY_CONFIG" ] || { echo 'Caddyfile-Mount nicht gefunden. Serverkonfiguration muss geprüft werden.'; exit 1; }
-cp "$CADDY_CONFIG" "${CADDY_CONFIG}.fahrdienst-backup"
-python3 - "$CADDY_CONFIG" <<'PY'
-import re,sys
+# Shared routing belongs to fahrschulpilot. App deployment is read-only here.
+python3 - "$CADDY_CONFIG" <<'ROUTES'
+import re, sys
 from pathlib import Path
-p=Path(sys.argv[1]); text=p.read_text()
-host='app.tariq-fahrdienst.de'
-# Existing host blocks stay intact; a missing host gets its own scoped route.
-if not re.search(r'(?m)^\s*(?:https://)?app\.tariq-fahrdienst\.de\s*\{',text):
-    if host in text:
-        raise SystemExit('Domain steht in einer komplexen Caddy-Konfiguration. Keine automatische Änderung.')
-    p.write_text(text+'\napp.tariq-fahrdienst.de {\n  reverse_proxy tariq-fahrdienst-app:80\n}\n')
-PY
-if ! docker exec "$CADDY_CONTAINER" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
-  cp "${CADDY_CONFIG}.fahrdienst-backup" "$CADDY_CONFIG"
-  exit 1
-fi
-docker exec "$CADDY_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+text = Path(sys.argv[1]).read_text()
+block = re.search(r'(?ms)^app\.tariq-fahrdienst\.de\s*\{(.*?)^\}', text)
+if not block or not re.search(r'(?m)^\s*reverse_proxy\s+tariq-fahrdienst-app:80\s*$', block.group(1)):
+    raise SystemExit('Geschützte Fahrdienst-Route fehlt. Zentrales Routing-Deployment erforderlich.')
+ROUTES
 for attempt in $(seq 1 15); do
   if curl --fail --silent --show-error --max-time 15 https://app.tariq-fahrdienst.de/ -o /tmp/fahrdienst-public.html && grep -q 'id="root"' /tmp/fahrdienst-public.html; then
     echo 'Fahrdienst-App öffentlich erreichbar.'
