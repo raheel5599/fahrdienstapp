@@ -22,7 +22,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 | Erledigt | Storno und Korrektur | Eigener Stornobeleg mit exakter Gegenbuchung und Originalbezug; verknüpfte Ersatzrechnung, erneut prüfbare Fahrtenfälle, erhaltene Eigenanteilquittung und separate Erfassung ausgeführter Rückzahlungen. |
 | Hoch | Dokumente | Originalbelege können als PDF/JPEG/PNG/WebP hochgeladen, Kunden und Verordnungen/Genehmigungen/Fahrten zugeordnet, angesehen, heruntergeladen, archiviert und wiederhergestellt werden. OCR und ein Fahrer-Upload bleiben separate Erweiterungen. |
 | Hoch | Fachliche Abnahme | Reale Büro-/Fahrerrollen, komplette Fahrt bis Rechnung, Belege und Apple-Druck-/PDF-Dialog auf tatsächlichen iPads/iPhones mit kontrollierten Daten prüfen. UI-Fixtures ersetzen diese Prüfung nicht. |
-| Mittel | Fahrtenhistorie | Live-Disposition zeigt nur den heutigen Tag; der Loader begrenzt Fahrten auf gestern bis 45 Tage voraus. Datumsfilter, ältere Historie und Suche fehlen in dieser Ansicht. |
+| Erledigt | Fahrtenhistorie | Eigener Reiter mit Monats-/Kunden-/Statusfilter, Suche und nachträglicher Sammelbestätigung bzw. Ausfallerfassung. Prüfung vor Rechnung bleibt erforderlich. |
 | Erledigt | Privatabrechnung | Privatfahrt und Bruttopreis mit Steuersatz beim Anlegen wählbar; nach Abschluss automatischer Abrechnungsfall, Preisprüfung und Rechnung mit Vorschau. Zahlungsstatus über Rechnungen sichtbar. |
 | Mittel | Buchhaltung | Menü vorhanden, Inhalt ist Platzhalter. Einnahmen/Ausgaben, offene Posten, Zahlungsabgleich und Exporte fehlen. |
 | Mittel | Berichte | Menü vorhanden, Inhalt ist Platzhalter. Umsatz, Kilometer, Auslastung und Zeitraumauswertungen fehlen. |
@@ -118,3 +118,13 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 - Bearbeiten aktualisiert zukünftige offene, nicht zugewiesene Termine ohne Abrechnungsfall. Vergangene, zugewiesene, begonnene, abgeschlossene und abgerechnete Fahrten bleiben erhalten. Pause entfernt ausschließlich solche ungebundenen zukünftigen Termine; Wiederaufnahme ergänzt ab heute und erzeugt keine nachträglichen Fahrten während der Pause.
 - Speicherung, Änderung, Pause und Terminerzeugung erfolgen atomar im berechtigungsgeprüften Service-RPC. Unique-Konflikte berücksichtigen den vorhandenen partiellen Index und verhindern doppelte Termine auch bei täglicher Wiederholung. Interne Fortschreibung ist nicht über die öffentliche API ausführbar.
 - 106 Node-Tests und SQL-Rollback-Prüfungen: Start am Dienstag mit Mo/Mi/Fr, 26 September-Hin/Rück-Termine, unbegrenzte Fortschreibung nach über 370 Tagen, Enddatum, Bearbeiten/Pause ohne Historienverlust, Wiederaufnahme, Idempotenz und Rollenprüfung.
+
+
+## Fahrtenhistorie und nachträgliche Bestätigung
+
+- Fahrten / Disposition → Fahrtenhistorie: Monat (Vorschlag letzter Monat), Kunde, Status und Suche nach Name/Strecke. Daten werden nach Monat/Kunde serverseitig eingegrenzt und vollständig paginiert gelesen; Darstellung jeweils 50 Fahrten mit Weitere-laden.
+- Vergangene offene/geplante Fahrten einzeln oder sichtbar gesammelt auswählen (maximal 100). Hin und Rück bleiben getrennt. Durchführung mit Pflichtbestätigung und Nachweisnotiz erfasst ausschließlich tatsächlich durchgeführte Fahrten; Ausfälle mit Grund werden storniert und erhalten keine Abrechnungsfälle.
+- Atomare Speicherung einschließlich Abrechnungsfällen, sortierte Zeilensperren und Versionsprüfung: Änderungen an einer Fahrt verhindern Teilbestätigungen. Wiederholung derselben Entscheidung erzeugt keine zweiten Fälle. Zukünftige, laufende, stornierte und bereits regulär abgeschlossene Fahrten werden abgewiesen.
+- Nachträgliche Erfassung bleibt mit tatsächlichem Erfassungsdatum, Büro-/Chefbenutzer und Notiz sichtbar. Es werden keine erfundenen Unterwegs-/Ankunfts-/Startzeiten gesetzt. Bestehende Live-Statuswechsel bleiben unverändert.
+- Bestätigte Krankenfahrten erscheinen als prüfbare Fälle, noch ohne Rechnung. Primäre Versicherung wird am Leistungsdatum ermittelt; Privatpreise bleiben gespeichert. Kilometer, Kostenträger, Vertrag, Fahrzeugart und Eigenanteil müssen vor der Rechnung neu geprüft/berechnet werden.
+- 109 Node-Tests und SQL-Rollback-Prüfung: Rolle/Pflichtbestätigung, Hin/Rück, Ausfall, private und Kassenfälle, Versionskonflikt ohne Teilbuchung, Zukunftssperre, unveränderte Live-Übergänge und Idempotenz. Browser-Fixtures prüfen Monats-/Kundenfilter, getrennte Auswahl, Bestätigungsdialog, Pflichtgrund, Serverfehler und Zukunftssperre auf Handy/iPad/Desktop mit fiktiven Daten.

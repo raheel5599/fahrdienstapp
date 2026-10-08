@@ -1,0 +1,45 @@
+begin;
+do $$
+declare actor uuid; unit_id uuid; org uuid; customer uuid; insurance uuid; hin uuid; rueck uuid; future uuid; cancelled uuid; other uuid; stamp timestamptz; entries jsonb; result jsonb; failed boolean; today date:=(now() at time zone 'Europe/Berlin')::date;
+begin
+ select m.user_id,b.id,b.organization_id into actor,unit_id,org from public.memberships m join public.business_units b on b.id=m.business_unit_id where b.code='fahrdienst' and public.finance_actor_allowed(m.user_id,b.id) limit 1;
+ insert into public.customers(organization_id,home_business_unit_id,first_name,last_name) values(org,unit_id,'QA','History') returning id into customer;
+ insert into public.customer_insurances(customer_id,insurer_name,is_primary,exempt,valid_from) values(customer,'QA',true,false,today-30) returning id into insurance;
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status) values(unit_id,customer,today-10,'08:00','Dialyse','A','B','outbound','offen') returning id into hin;
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status) values(unit_id,customer,today-10,'13:00','Dialyse','B','A','return','geplant') returning id into rueck;
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status) values(unit_id,customer,today+1,'08:00','Dialyse','A','B','outbound','offen') returning id into future;
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status) values(unit_id,customer,today-8,'08:00','Dialyse','A','B','outbound','storniert') returning id into cancelled;
+ select jsonb_agg(jsonb_build_object('id',id,'updatedAt',updated_at)) into entries from public.trips where id in (hin,rueck);
+ failed:=false;begin perform public.record_historical_trips(unit_id,gen_random_uuid(),entries,'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Unauthorized confirmation';
+ failed:=false;begin perform public.record_historical_trips(unit_id,actor,null,'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Null selection';
+ failed:=false;begin perform public.record_historical_trips(unit_id,actor,jsonb_build_array(entries->0,entries->0),'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Duplicate selection';
+ failed:=false;begin perform public.record_historical_trips(unit_id,actor,entries||jsonb_build_array(jsonb_build_object('id',future,'updatedAt',now())),'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Future trip';
+ assert(select bool_and(status in ('offen','geplant')) from public.trips where id in (hin,rueck)),'Partial confirmation on failure';
+ failed:=false;begin perform public.record_historical_trips(unit_id,actor,entries||jsonb_build_array(jsonb_build_object('id',cancelled,'updatedAt',now())),'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Cancelled trip billed';
+ failed:=false;begin perform public.record_historical_trips(unit_id,actor,jsonb_set(entries,'{0,updatedAt}',to_jsonb((now()-interval '1 day')::text)),'abgeschlossen','QA confirmed');exception when others then failed:=true;end;assert failed,'Stale trip accepted';
+ assert(select count(*)=0 from public.trip_billing_cases where customer_id=customer),'Partial billing on failure';
+ result:=public.record_historical_trips(unit_id,actor,entries,'abgeschlossen','QA actual performance checked');assert(result->>'recorded')::integer=2;
+ assert(select bool_and(status='abgeschlossen' and history_recorded_by=actor and history_note='QA actual performance checked' and history_recorded_at is not null and started_at is null and on_the_way_at is null and arrived_at is null) from public.trips where id in (hin,rueck)),'Confirmation simulated driver workflow';
+ assert(select count(*)=2 and bool_and(billing_status='review' and copay_rule_version=0 and invoice_id is null and own_share_invoice_id is null and direction_count=1 and payer_type='insurer' and insurance_id=insurance) from public.trip_billing_cases where customer_id=customer),'Wrong billing preparation';
+ assert(select count(*)=2 from public.trip_status_events where trip_id in (hin,rueck) and status='abgeschlossen' and note like 'Nachträglich erfasst:%' and actor_user_id=actor),'Missing audit';
+ result:=public.record_historical_trips(unit_id,actor,entries,'abgeschlossen','Repeated QA');assert(result->>'recorded')::integer=0;assert(result->>'alreadyRecorded')::integer=2;
+ assert(select count(*)=2 from public.trip_billing_cases where customer_id=customer),'Repeated confirmation duplicated case';
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status) values(unit_id,customer,today-7,'08:00','Dialyse','A','B','outbound','offen') returning id,updated_at into other,stamp;
+ perform public.record_historical_trips(unit_id,actor,jsonb_build_array(jsonb_build_object('id',other,'updatedAt',stamp)),'storniert','QA clinic closed');
+ assert(select status='storniert' and history_note='QA clinic closed' from public.trips where id=other),'Historical exclusion';
+ assert not exists(select 1 from public.trip_billing_cases where trip_id=other),'Excluded trip billed';
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address,direction,status,billing_payer_type,private_price,private_vat_rate) values(unit_id,customer,today-6,'08:00','Privatfahrt','A','B','outbound','offen','private',42,7) returning id,updated_at into other,stamp;
+ perform public.record_historical_trips(unit_id,actor,jsonb_build_array(jsonb_build_object('id',other,'updatedAt',stamp)),'abgeschlossen','QA actual private ride');
+ assert(select payer_type='private' and billing_status='review' and private_amount=42 and private_vat_rate=7 and insurance_id is null from public.trip_billing_cases where trip_id=other),'Private historical preparation';
+ -- Existing live workflow still enforces each transition.
+ failed:=false;begin update public.trips set status='abgeschlossen',updated_by=actor where id=future;exception when others then failed:=true;end;assert failed,'Normal transition bypass';
+ update public.trips set status='geplant',updated_by=actor where id=future;
+ update public.trips set status='auf_dem_weg',updated_by=actor where id=future;
+ update public.trips set status='angekommen',updated_by=actor where id=future;
+ update public.trips set status='in_fahrt',updated_by=actor where id=future;
+ update public.trips set status='abgeschlossen',updated_by=actor where id=future;
+ assert(select status='abgeschlossen' and started_at is not null and history_recorded_at is null from public.trips where id=future),'Live workflow broken';
+ assert not has_function_privilege('authenticated','public.record_historical_trips(uuid,uuid,jsonb,text,text)','execute');
+end;$$;
+rollback;
+select 'historical_confirmation_passed' as result;

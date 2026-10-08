@@ -16,6 +16,7 @@ import UserManagement from './components/UserManagement.jsx';
 import ClientManagement from './components/ClientManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
 import LiveDispatchBoard from './components/LiveDispatchBoard.jsx';
+import TripHistory from './components/TripHistory.jsx';
 import LiveDispatchModal from './components/LiveDispatchModal.jsx';
 import DriverPortal from './components/DriverPortal.jsx';
 import DriverManagement from './components/DriverManagement.jsx';
@@ -71,6 +72,7 @@ function StatusPill({ status }) {
 function App() {
   const { session, loading, login, logout, can } = useAuthSession();
   const [financeTab, setFinanceTab] = useState('invoices');
+  const [dispatchTab,setDispatchTab]=useState('live');
   const [active, setActive] = useState('dashboard');
   const [mobileNav, setMobileNav] = useState(false);
   const [dispatchOpen, setDispatchOpen] = useState(false);
@@ -222,7 +224,9 @@ function App() {
             <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
-          ) : active === 'dashboard' || active === 'disposition' ? (
+          ) : active === 'disposition' ? (
+            <div><div className="module-tabs finance-tabs" aria-label="Fahrtenansicht"><button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button><button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button></div>{dispatchTab==='history'?<TripHistory clients={clientData.clients} onRecorded={()=>Promise.all([dispatchData.refresh(),billingData.refresh()])}/>:<LiveDispatchBoard data={dispatchData} drivers={drivers} vehicles={fleet.vehicles} onNew={()=>setDispatchOpen(true)} onEdit={id=>setDispatchOpen(id)}/>}</div>
+          ) : active === 'dashboard' ? (
             <LiveDispatchBoard
               data={dispatchData}
               drivers={drivers}

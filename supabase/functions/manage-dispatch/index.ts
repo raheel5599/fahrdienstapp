@@ -60,6 +60,17 @@ Deno.serve(async(req:Request)=>{
   const driverId=membership.driver_id||null;
   const action=String(body.action||"");
 
+  if(action==="record_history"){
+    if(!isStaff)return reply(403,{error:"Nur Büro oder Chef dürfen vergangene Fahrten bestätigen."});
+    if(body.confirmed!==true)return reply(400,{error:"Tatsächliche Durchführung bzw. Ausfall bitte bestätigen."});
+    const entries=body.entries;
+    if(!Array.isArray(entries)||entries.length<1||entries.length>100||new Set(entries.map(e=>e?.id)).size!==entries.length)return reply(400,{error:"Bitte 1 bis 100 verschiedene Fahrten auswählen."});
+    if(!["abgeschlossen","storniert"].includes(body.decision)||String(body.note||"").trim().length<3)return reply(400,{error:"Entscheidung und Begründung sind erforderlich."});
+    const {data,error}=await db.rpc("record_historical_trips",{p_unit:unit.id,p_actor:user.id,p_entries:entries.map(e=>({id:e.id,updatedAt:e.updatedAt})),p_decision:body.decision,p_note:String(body.note).trim()});
+    if(error)return reply(409,{error:error.message});
+    return reply(200,data);
+  }
+
   const customerForUnit=async(customerId:string)=>{
     const {data:link}=await db.from("customer_business_units").select("customer_id").eq("customer_id",customerId).eq("business_unit_id",unit.id).maybeSingle();
     if(!link)return null;
