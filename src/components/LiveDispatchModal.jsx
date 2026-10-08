@@ -47,6 +47,7 @@ export default function LiveDispatchModal({trip,trips=[],clients,drivers,vehicle
     toAddress:trip?.to||'',
     driverId:trip?.driverId||'',
     vehicleId:trip?.vehicleId||initialDriver?.vehicleId||'',
+    billingPayerType:trip?.billingPayerType||'auto',privatePrice:trip?.privatePrice??'',privateVatRate:trip?.privateVatRate??0,
     notes:trip?.notes||''
   });
   const [saving,setSaving]=useState(false);
@@ -134,6 +135,7 @@ export default function LiveDispatchModal({trip,trips=[],clients,drivers,vehicle
         <label><span>Datum</span><input type="date" value={form.serviceDate} onChange={e=>set('serviceDate',e.target.value)} required disabled={Boolean(trip)}/></label>
         <label><span>Uhrzeit</span><input type="time" value={form.scheduledTime} onChange={e=>set('scheduledTime',e.target.value)} required disabled={Boolean(trip)}/></label>
         <label><span>Richtung</span><select value={form.direction} onChange={e=>set('direction',e.target.value)} disabled={Boolean(trip)}><option value="outbound">Hinfahrt</option><option value="return">Rückfahrt</option></select></label>
+        {APP_CONFIG.businessUnitCode==='fahrdienst'&&<><label><span>Abrechnung</span><select aria-label="Abrechnung" value={form.billingPayerType} onChange={e=>set('billingPayerType',e.target.value)} disabled={Boolean(trip)}><option value="auto">Nach hinterlegter Krankenversicherung</option><option value="insurer">Krankenkasse</option><option value="private">Privatfahrt</option></select></label>{form.billingPayerType==='private'&&<><label><span>Privatpreis € je Fahrtrichtung</span><input type="number" min="0.01" step="0.01" value={form.privatePrice} onChange={e=>set('privatePrice',e.target.value)} disabled={Boolean(trip)} placeholder="Optional, später prüfen"/></label><label><span>MwSt. Privatfahrt</span><select value={form.privateVatRate} onChange={e=>set('privateVatRate',e.target.value)} disabled={Boolean(trip)}><option value="0">0 %</option><option value="7">7 %</option><option value="19">19 %</option></select></label></>}</>}
         <label><span>Häufiges Ziel</span><select value={form.destinationId} onChange={e=>chooseDestination(e.target.value)} disabled={Boolean(trip)}><option value="">Manuell</option>{(customer?.destinations||[]).map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
         <label className="wide"><span>Abholadresse</span><input value={form.fromAddress} onChange={e=>set('fromAddress',e.target.value)} required disabled={Boolean(trip)}/></label>
         <label className="wide"><span>Zieladresse</span><input value={form.toAddress} onChange={e=>set('toAddress',e.target.value)} required disabled={Boolean(trip)}/></label>

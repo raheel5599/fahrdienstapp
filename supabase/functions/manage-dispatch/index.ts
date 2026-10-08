@@ -1,3 +1,4 @@
+import {calculateOwnShare,privateFare,COPAY_RULE_VERSION} from "../_shared/copay.js";
 import {calculateTariff} from "../_shared/tariffs.js";
 import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -96,8 +97,11 @@ Deno.serve(async(req:Request)=>{
     const toAddress=clean(body.toAddress);
     if(!serviceDate||!scheduledTime||!fromAddress||!toAddress)return reply(400,{error:"Datum, Uhrzeit, Abhol- und Zieladresse sind erforderlich."});
 
+    const billingPayerType=body.billingPayerType||"auto";if(!["auto","private","insurer"].includes(billingPayerType))return reply(400,{error:"Kostenträger ist ungültig."});
+    const privateVatRate=Number(body.privateVatRate??0);if(![0,7,19].includes(privateVatRate))return reply(400,{error:"Steuersatz ist ungültig."});
+    let fare:any=null;if(billingPayerType==="private"&&body.privatePrice!=null&&body.privatePrice!==""){try{fare=privateFare({amount:body.privatePrice,vatRate:body.privateVatRate})}catch(e){return reply(400,{error:e.message})}}
     const {data:trip,error}=await db.from("trips").insert({
-      business_unit_id:unit.id,customer_id:customer.id,service_date:serviceDate,scheduled_time:scheduledTime,
+      business_unit_id:unit.id,customer_id:customer.id,service_date:serviceDate,scheduled_time:scheduledTime,billing_payer_type:billingPayerType,private_price:fare?.gross||null,private_vat_rate:privateVatRate,
       direction:String(body.direction||"outbound"),trip_type:clean(body.tripType)||"Krankenfahrt",
       from_address:fromAddress,to_address:toAddress,status:"offen",notes:clean(body.notes),
       customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),
@@ -233,6 +237,13 @@ Deno.serve(async(req:Request)=>{
           .or("valid_until.is.null,valid_until.gte."+updated.service_date)
           .order("created_at",{ascending:false}).limit(1).maybeSingle();
 
+        const privateTrip=updated.billing_payer_type==="private"||(updated.billing_payer_type!=="insurer"&&!insurance);
+        if(privateTrip){
+          let fare:any=null;if(updated.private_price!=null){try{fare=privateFare({amount:updated.private_price,vatRate:updated.private_vat_rate})}catch{}}
+          const {error:caseError}=await db.from("trip_billing_cases").upsert({business_unit_id:unit.id,trip_id:updated.id,customer_id:updated.customer_id,payer_type:"private",private_amount:fare?.gross||null,private_vat_rate:updated.private_vat_rate||0,gross_amount:fare?.gross||0,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",billing_status:fare?"ready":"review",review_message:fare?"":"Privatpreis vor Rechnungserstellung prüfen.",direction_count:1,calculated_at:new Date().toISOString()},{onConflict:"trip_id",ignoreDuplicates:true});
+          if(caseError)return reply(409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
+          return reply(200,{ok:true,trip:updated});
+        }
         let insurer:any=null, contract:any=null, defaultKm:any=null;
         if(insurance){
           if(insurance.insurer_code){
@@ -250,14 +261,15 @@ Deno.serve(async(req:Request)=>{
         const {data:dest}=await db.from("customer_destinations").select("default_km,address").eq("customer_id",updated.customer_id).eq("active",true).eq("address",updated.to_address).limit(1).maybeSingle();
         if(dest?.default_km!=null) defaultKm=Number(dest.default_km);
 
-        const exempt=Boolean(insurance?.exempt) && (!insurance?.exempt_until || insurance.exempt_until>=updated.service_date);
-        const ownShare=exempt?0:Math.max(0,Number(insurance?.copay||0));
+
+
         let legacyRates=[];
         if(contract?.tariff_lines==null&&contract){const {data:rates}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");legacyRates=rates||[];}
         const journeyKind=updated.series_id?"series":"single";
         const tariff=calculateTariff(contract,legacyRates,{date:updated.service_date,km:defaultKm,waitingMinutes:0,treatmentCode:defaultTreatment(updated.trip_type),vehicleClass:"unconfirmed",journeyKind,area:"unconfirmed"});
         const {base:baseFee,kmRate,surcharge,gross}=tariff;
-        const actualOwnShare=ownShare;
+        const copay=calculateOwnShare({gross,insurance,date:updated.service_date,lines:tariff.lines,positionCode:legacyRates[0]?.position_code});
+        const actualOwnShare=copay.amount;
         const insurerAmount=Math.max(0,Math.round((gross-actualOwnShare+Number.EPSILON)*100)/100);
         const positionCode=tariff.lines.find(l=>l.kind==="km")?.template||tariff.lines[0]?.template||legacyRates[0]?.position_code||null;
         const treatmentCode=defaultTreatment(updated.trip_type)||null;
@@ -267,19 +279,20 @@ Deno.serve(async(req:Request)=>{
         if(insurance && !insurer) review.push("Krankenkasse konnte keinem Kostenträger zugeordnet werden.");
         if(insurance && !contract) review.push("Kein aktiver Kassenvertrag gefunden.");
 
-        if(insurance && !exempt && ownShare===0) review.push("Eigenen Anteil prüfen.");
+
 
         const ready=review.length===0;
 
-        await db.from("trip_billing_cases").insert({
+        const {error:caseError}=await db.from("trip_billing_cases").upsert({
           business_unit_id:unit.id,trip_id:updated.id,customer_id:updated.customer_id,
-          insurance_id:insurance?.id||null,insurer_id:insurer?.id||null,contract_id:contract?.id||null,
-          position_code:positionCode,treatment_code:treatmentCode,billing_position:billingPosition,billing_status:!contract?"blocked":ready?"ready":"review",payer_type:insurance?"insurer":"private",
+          copay_rule_version:COPAY_RULE_VERSION,copay_note:copay.note,direction_count:1,insurance_id:insurance?.id||null,insurer_id:insurer?.id||null,contract_id:contract?.id||null,
+          position_code:positionCode,treatment_code:treatmentCode,billing_position:billingPosition,billing_status:!contract?"blocked":ready?"ready":"review",payer_type:"insurer",
           billable_km:defaultKm,base_fee:baseFee,km_rate:kmRate,surcharge_amount:surcharge,
           tariff_breakdown:tariff.lines,billing_vehicle_class:"unconfirmed",billing_journey_kind:journeyKind,billing_area:"unconfirmed",
           gross_amount:gross,own_share_amount:actualOwnShare,insurer_amount:insurerAmount,
           own_share_required:actualOwnShare>0,review_message:review.join(" "),calculated_at:new Date().toISOString()
-        });
+        },{onConflict:"trip_id",ignoreDuplicates:true});
+        if(caseError)return reply(409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
       }
     }
 

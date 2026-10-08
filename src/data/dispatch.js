@@ -20,6 +20,7 @@ function mapTrip(t){
     date:t.service_date,
     time:String(t.scheduled_time||'').slice(0,5),
     direction:t.direction,
+    billingPayerType:t.billing_payer_type,privatePrice:t.private_price,privateVatRate:t.private_vat_rate,
     type:t.trip_type,
     from:t.from_address,
     to:t.to_address,

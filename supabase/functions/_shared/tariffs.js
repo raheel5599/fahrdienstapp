@@ -52,6 +52,7 @@ export function calculateTariff(contract, legacyRates, input) {
   if (contract.tariff_lines==null) {
     const template=input.positionCode || legacyRates.find(r=>r.active)?.position_code;
     const position=composeBillingPosition(template,treatmentCode);
+    if(/^5148/.test(String(template||''))){const price=Number(input.meterAmount),review=[];if(!position)review.push('Vollständige Positionsnummer und Fahrtart-Code prüfen.');if(!Number.isFinite(price)||price<=0)review.push('Taxameterbetrag fehlt.');const gross=review.length?0:moneyRound(price);return {lines:gross?[{position_code:position,template,label:'Taxameterfahrt gemäß Vertrag',quantity:1,unit:'ride',price:gross,amount:gross,kind:'meter'}]:[],gross,review,base:0,kmRate:0,waiting:0,surcharge:0};}
     const base=Number(contract.base_fee||0),kmRate=Number(contract.price_per_km||0),waiting=moneyRound(Number(contract.waiting_per_hour||0)*waitingMinutes/60);
     const gross=moneyRound(base+km*kmRate+waiting);
     const review=[];

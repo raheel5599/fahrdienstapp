@@ -23,7 +23,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 | Hoch | Dokumente | Originalbelege können als PDF/JPEG/PNG/WebP hochgeladen, Kunden und Verordnungen/Genehmigungen/Fahrten zugeordnet, angesehen, heruntergeladen, archiviert und wiederhergestellt werden. OCR und ein Fahrer-Upload bleiben separate Erweiterungen. |
 | Hoch | Fachliche Abnahme | Reale Büro-/Fahrerrollen, komplette Fahrt bis Rechnung, Belege und Apple-Druck-/PDF-Dialog auf tatsächlichen iPads/iPhones mit kontrollierten Daten prüfen. UI-Fixtures ersetzen diese Prüfung nicht. |
 | Mittel | Fahrtenhistorie | Live-Disposition zeigt nur den heutigen Tag; der Loader begrenzt Fahrten auf gestern bis 45 Tage voraus. Datumsfilter, ältere Historie und Suche fehlen in dieser Ansicht. |
-| Mittel | Privatabrechnung | Manuelle Privatrechnungen sind vorhanden. Der automatische Abrechnungsfall-/Rechnungsablauf richtet sich bisher an Kassenfahrten; einen eigenen automatischen Privatfahrtenablauf ergänzen. |
+| Erledigt | Privatabrechnung | Privatfahrt und Bruttopreis mit Steuersatz beim Anlegen wählbar; nach Abschluss automatischer Abrechnungsfall, Preisprüfung und Rechnung mit Vorschau. Zahlungsstatus über Rechnungen sichtbar. |
 | Mittel | Buchhaltung | Menü vorhanden, Inhalt ist Platzhalter. Einnahmen/Ausgaben, offene Posten, Zahlungsabgleich und Exporte fehlen. |
 | Mittel | Berichte | Menü vorhanden, Inhalt ist Platzhalter. Umsatz, Kilometer, Auslastung und Zeitraumauswertungen fehlen. |
 | Mittel | Nachrichten | Menü vorhanden, Inhalt ist Platzhalter. Fahrerhinweise/Push-Funktionen sind davon getrennt; kein vollständiges Büro-/Fahrer-Nachrichtensystem vorhanden. |
@@ -44,7 +44,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 ## Sinnvolle Reihenfolge
 
 1. Unternehmensprofil fachlich vervollständigen; Originalbelege ergänzen.
-2. Privatfahrtenablauf und Abrechnungsläufe/Exporte.
+2. Abrechnungsläufe/Exporte.
 3. Historie, Filter, Buchhaltung und Berichte.
 4. Kommunikation, Einstellungen, echte Suche und danach optional Offlinebetrieb/GPS.
 
@@ -75,3 +75,15 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 - Storno und Erstellung der Fahrten-/Ersatzrechnung sind Datenbanktransaktionen. Sperren, eindeutige Referenzen und Versionsprüfung verhindern Doppelbelege und Teilstände. RPC-Ausführung ist auf den Server beschränkt und prüft aktive Büro-/Chefberechtigung im Geschäftsbereich.
 - Historische Rechnungen, die vor dieser Änderung nur den Status Storniert erhielten, werden nicht rückwirkend mit neuen Belegen ergänzt.
 - 60 automatisierte Server-/Dokumenttests und SQL-Transaktionsprüfung mit anschließendem Rollback: exakte Gegenbuchung einschließlich Eigenanteilabzug, Erhalt quittierter Eigenanteile, Rückzahlung, Ersatzrechnung mit MwSt., Wiederholung, Berechtigungen und veraltete Fälle. Browser-Fixtures prüfen Storno, Vorschau, Rückzahlung und Ersatzrechnung auf den fünf Bildschirmgrößen.
+
+## Automatischer Eigenanteil und Privatfahrten ergänzt
+
+- Ein Abrechnungsfall gilt für genau eine gespeicherte Fahrtrichtung. Hin- und Rückfahrt werden als zwei Fahrten angelegt und getrennt berechnet; keine gemeinsame Begrenzung oder Halbierung. Zusammengefasste Altfälle mit direction_count=2 sind zur getrennten Prüfung gesperrt.
+- Nicht befreit: 5148-Positionen erhalten 5 € je Richtung; andere Positionen 10 % des Fahrtrichtungsbetrags, mindestens 5 € und höchstens 10 €, auf Cent gerundet und nie über dem Fahrtbetrag. 120 € je Richtung bedeuten 10 € hin + 10 € zurück; bei 5148 5 € + 5 €.
+- Befreiung und Versicherungszeitraum gelten am Fahrtag. Eingetragene alte manuelle Eigenanteile werden nicht mehr als Berechnungsquelle verwendet. Die Kundenakte zeigt die automatische Regel statt eines festen Betrags.
+- Bereits ausgestellte Rechnungen und quittierte Eigenanteile werden nicht automatisch geändert. Ältere unberechnete Fälle müssen neu berechnet werden, bevor Rechnung oder Eigenanteilquittung erzeugt werden. Abweichungen bei vorhandener Quittung werden zur Klärung gesperrt.
+- Zahlungsdialog für Eigenanteile: Betrag/Richtung anzeigen, Bar/Karte wählen und tatsächlichen vollständigen Zahlungseingang bestätigen. Quittung und Zahlungsstatus werden in einer Transaktion gespeichert; wiederholte Anfragen liefern denselben Beleg. Befreiungsänderungen vor Rechnungserstellung werden serverseitig erneut geprüft.
+- Privatfahrt bei Disposition ausdrücklich auswählbar, auch für Patienten mit Krankenversicherung. Bruttopreis je Richtung und Steuersatz 0/7/19 % eintragen; bei fehlendem Preis bleibt der nach Fahrtabschluss automatisch erzeugte Fall zur Prüfung offen. Auto-Auswahl ohne gültige Versicherung bleibt zur Prüfung als Privatfall; eine Kassenfahrt ohne gültigen Vertrag bleibt gesperrt.
+- Abrechnungen → Prüfen: Kostenträger, Privatpreis und Steuersatz prüfen; Rechnung per Aktion erstellen. Der gesamte Privatpreis wird dem Kunden berechnet, ohne Kassenbetrag oder Eigenanteilabzug. Vorschau öffnet direkt; Zahlung über Rechnungen erfassen. Storno und verknüpfte Ersatzrechnung funktionieren auch für Privatfahrten.
+- Der Fahrtabschluss erstellt den Abrechnungsfall, noch keine Rechnung. Das Büro bestätigt die Rechnungserstellung; fehlende Unternehmensdaten oder Preise bleiben sichtbar gesperrt.
+- 74 automatisierte Tests plus SQL-Transaktionsprüfungen mit anschließendem Rollback: Grenzen, 5148, Hin/Rück, Befreiungsdatum, unveränderter quittierter Eigenanteil, Privatpreis/Steuer, Rechnung/Storno/Ersatz, doppelte Quittungen, Berechtigungen und Fehler-Rollback. UI-Fixtures ergänzen Privatpreis, Zahlungsbestätigung, Bar/Karte und Vorschauen auf den fünf Bildschirmgrößen.

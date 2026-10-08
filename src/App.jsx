@@ -213,7 +213,7 @@ function App() {
           ) : active === 'rechnungen' && can(PERMISSIONS.INVOICES_MANAGE) ? (
             <div><div className="module-tabs finance-tabs" aria-label="Finanzdokumente"><button className={financeTab==='invoices'?'active':''} onClick={()=>setFinanceTab('invoices')}>Rechnungen</button><button className={financeTab==='receipts'?'active':''} onClick={()=>setFinanceTab('receipts')}>Quittungen</button></div>{financeTab==='invoices'?<InvoiceManagement data={financeData} clients={clientData.clients} contracts={contractData} billingCases={billingData.cases} onBillingRefresh={billingData.refresh} onOpenBilling={()=>setActive('abrechnung')} />:<ReceiptManagement data={financeData} clients={clientData.clients} />}</div>
           ) : active === 'abrechnung' && can(PERMISSIONS.BILLING_MANAGE) ? (
-            <BillingManagement data={billingData} onFinanceRefresh={financeData.refresh} />
+            <BillingManagement data={billingData} financeData={financeData} onFinanceRefresh={financeData.refresh} />
           ) : active === 'kassen' && can(PERMISSIONS.CONTRACTS_MANAGE) ? (
             <ContractManagement data={contractData} />
           ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (

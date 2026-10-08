@@ -126,7 +126,7 @@ function Overview({client}){
     <div className="client-summary-grid">
       <Summary icon={Stethoscope} label="Mobilität" value={mobilityLabel[client.mobility]||client.mobility}/>
       <Summary icon={ShieldCheck} label="Krankenkasse" value={primary?.insurer_name||'Nicht hinterlegt'}/>
-      <Summary icon={BadgeEuro} label="Zuzahlung" value={primary?.exempt?'Befreit':primary?Number(primary.copay||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'}):'Nicht hinterlegt'}/>
+      <Summary icon={BadgeEuro} label="Zuzahlung" value={primary?.exempt?(primary.exempt_until?'Befreiung bis '+primary.exempt_until:'Befreit'):primary?'Automatisch je Fahrt':'Nicht hinterlegt'}/>
       <Summary icon={CalendarDays} label="Stammkunde" value={client.isRegular?'Ja':'Nein'}/>
     </div>
     <div className="client-info-grid">
@@ -174,7 +174,7 @@ function InsuranceTab({client,onSaved,onError}){
       <label><span>Kostenträgerkennung</span><input value={form.insurerCode} onChange={e=>set('insurerCode',e.target.value)}/></label>
       <label><span>Versichertennummer</span><input value={form.insuranceNumber} onChange={e=>set('insuranceNumber',e.target.value)}/></label>
       <label><span>Tarif / Vertrag</span><input value={form.tariffId} onChange={e=>set('tariffId',e.target.value)} placeholder="z. B. AOK Hessen"/></label>
-      <label><span>Zuzahlung €</span><input type="number" min="0" step="0.01" value={form.copay} onChange={e=>set('copay',e.target.value)}/></label>
+      <label><span>Zuzahlung je Fahrtrichtung</span><input readOnly value="Automatisch · 5148: 5 € · sonst 5–10 €"/></label>
       <label><span>Befreit bis</span><input type="date" value={form.exemptUntil} onChange={e=>set('exemptUntil',e.target.value)} disabled={!form.exempt}/></label>
       <label className="checkbox-label wide"><input type="checkbox" checked={form.exempt} onChange={e=>set('exempt',e.target.checked)}/><span>Zuzahlungsbefreit</span></label>
     </div>
