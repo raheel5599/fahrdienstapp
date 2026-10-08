@@ -37,3 +37,4 @@ export const createCaseInvoice=item=>invoke({action:'invoice',caseId:item.id});
 export const createOwnShareReceipt=(item,context,paymentMethod='cash')=>invoke({action:'own_share_receipt',caseId:item.id,paymentMethod});
 
 export const createOwnShareInvoice=(item,context,dueDate)=>invoke({action:'own_share_invoice',caseId:item.id,dueDate});
+export const createMonthlyOwnShareInvoice=(customerId,month,cases,dueDate)=>invoke({action:'monthly_own_share_invoice',customerId,month,entries:cases.map(c=>({id:c.id,updatedAt:c.updated_at})),dueDate});

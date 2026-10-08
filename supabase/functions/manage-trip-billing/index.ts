@@ -7,6 +7,20 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 const H={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
 const out=(s:number,b:any)=>new Response(JSON.stringify(b),{status:s,headers:H});
 const cash=(v:any)=>Math.round((Math.max(0,Number(v)||0)+Number.EPSILON)*100)/100;
+async function validateOwnInvoice(db:any,unitId:string,org:string,c:any,trip:any){
+   if(!c.invoice_id&&!c.own_share_invoice_id){
+     const contract=await resolveContract(db,unitId,org,c.insurer_id,trip.service_date,c.contract_id,tripServiceType(trip));
+     if(!contract||contract.id!==c.contract_id)throw Error("Kassenvertrag zuerst neu prüfen und berechnen.");
+     if(contract.tariff_lines!=null||c.tariff_breakdown?.length){
+       let rates=[];if(contract.tariff_lines==null){const {data,error}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");if(error)throw Error(error.message);rates=data||[];}
+       let current;try{current=calculateTariff(contract,rates,{positionCode:c.position_code,date:trip.service_date,km:c.billable_km,waitingMinutes:c.waiting_minutes,treatmentCode:c.treatment_code,vehicleClass:c.billing_vehicle_class,journeyKind:c.billing_journey_kind,area:c.billing_area,meterAmount:c.meter_amount})}catch(e){throw Error(e.message)}
+       if(current.review.length||tariffFingerprint(current.lines)!==tariffFingerprint(c.tariff_breakdown)||current.gross!==cash(c.gross_amount))throw Error("Tarifpositionen zuerst neu berechnen.");
+     }
+     const {data:insurance}=await db.from("customer_insurances").select("*").eq("id",c.insurance_id).eq("customer_id",c.customer_id).maybeSingle();
+     const own=calculateOwnShare({gross:c.gross_amount,insurance,date:trip.service_date,positionCode:c.position_code,lines:c.tariff_breakdown||[]});
+     if(!insuranceValidOn(insurance,trip.service_date)||own.amount!==cash(c.own_share_amount)||cash(c.insurer_amount)!==cash(c.gross_amount-own.amount))throw Error("Versicherung oder Eigenanteil geändert. Neu berechnen.");
+   }
+}
 Deno.serve(async(req)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:H});
  const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -22,6 +36,22 @@ Deno.serve(async(req)=>{
  if(!unit)return out(400,{error:"Geschäftsbereich fehlt."});
  const {data:m}=await db.from("memberships").select("role").eq("user_id",user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
  if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
+ if(body.action==="monthly_own_share_invoice"){
+   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month||""))||!body.customerId||!Array.isArray(body.entries)||body.entries.length<1||body.entries.length>100||new Set(body.entries.map(e=>e?.id)).size!==body.entries.length)return out(400,{error:"Patient, Monat und 1 bis 100 verschiedene Eigenanteile auswählen."});
+   try{
+    for(let offset=0;offset<body.entries.length;offset+=6){await Promise.all(body.entries.slice(offset,offset+6).map(async(entry)=>{
+     const {data:item,error}=await db.from("trip_billing_cases").select("*").eq("id",entry.id).eq("business_unit_id",unit.id).maybeSingle();
+     if(error||!item||item.customer_id!==body.customerId)throw Error("Abrechnungsfall gehört nicht zum Patienten.");
+     const {data:ride}=await db.from("trips").select("*").eq("id",item.trip_id).eq("business_unit_id",unit.id).maybeSingle();
+     if(!ride||ride.status!=="abgeschlossen"||!ride.service_date.startsWith(body.month)||item.payer_type!=="insurer"||item.copay_rule_version!==COPAY_RULE_VERSION||!["ready","invoiced"].includes(item.billing_status)||cash(item.own_share_amount)<=0)throw Error("Abgeschlossene Kassenfahrt und Eigenanteil im Monat zuerst prüfen.");
+     if(!item.own_share_invoice_id&&(item.own_share_paid||item.receipt_id))throw Error("Eigenanteil bereits bezahlt oder quittiert.");
+     await validateOwnInvoice(db,unit.id,p.organization_id,item,ride);
+    }));}
+    const issuer=await loadIssuerSnapshot(db,unit.id);
+    const {data,error}=await db.rpc("issue_monthly_own_share_invoice",{p_unit:unit.id,p_actor:user.id,p_customer:body.customerId,p_month:body.month+"-01",p_entries:body.entries.map(e=>({id:e.id,updatedAt:e.updatedAt})),p_header:{issuerSnapshot:issuer,dueDate:body.dueDate||null}});
+    return error?out(409,{error:error.message}):out(200,data);
+   }catch(e){return out(409,{error:e.message})}
+ }
  const {data:c}=await db.from("trip_billing_cases").select("*").eq("id",body.caseId).eq("business_unit_id",unit.id).maybeSingle();
  if(!c)return out(404,{error:"Abrechnungsfall nicht gefunden."});
  const {data:trip}=await db.from("trips").select("*").eq("id",c.trip_id).maybeSingle();
@@ -83,18 +113,7 @@ Deno.serve(async(req)=>{
    if(c.payer_type!=="insurer"||c.copay_rule_version!==COPAY_RULE_VERSION||!["ready","invoiced"].includes(c.billing_status)||trip.status!=="abgeschlossen")return out(409,{error:"Abgeschlossene Kassenfahrt und Eigenanteil zuerst prüfen."});
    if(cash(c.own_share_amount)<=0)return out(400,{error:"Kein Eigenanteil vorhanden."});
    if(!c.own_share_invoice_id&&(c.own_share_paid||c.receipt_id))return out(409,{error:"Eigenanteil bereits quittiert oder bezahlt."});
-   if(!c.invoice_id&&!c.own_share_invoice_id){
-     const contract=await resolveContract(db,unit.id,p.organization_id,c.insurer_id,trip.service_date,c.contract_id,tripServiceType(trip));
-     if(!contract||contract.id!==c.contract_id)return out(409,{error:"Kassenvertrag zuerst neu prüfen und berechnen."});
-     if(contract.tariff_lines!=null||c.tariff_breakdown?.length){
-       let rates=[];if(contract.tariff_lines==null){const {data,error}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");if(error)return out(409,{error:error.message});rates=data||[];}
-       let current;try{current=calculateTariff(contract,rates,{positionCode:c.position_code,date:trip.service_date,km:c.billable_km,waitingMinutes:c.waiting_minutes,treatmentCode:c.treatment_code,vehicleClass:c.billing_vehicle_class,journeyKind:c.billing_journey_kind,area:c.billing_area,meterAmount:c.meter_amount})}catch(e){return out(409,{error:e.message})}
-       if(current.review.length||tariffFingerprint(current.lines)!==tariffFingerprint(c.tariff_breakdown)||current.gross!==cash(c.gross_amount))return out(409,{error:"Tarifpositionen zuerst neu berechnen."});
-     }
-     const {data:insurance}=await db.from("customer_insurances").select("*").eq("id",c.insurance_id).eq("customer_id",c.customer_id).maybeSingle();
-     const own=calculateOwnShare({gross:c.gross_amount,insurance,date:trip.service_date,positionCode:c.position_code,lines:c.tariff_breakdown||[]});
-     if(!insuranceValidOn(insurance,trip.service_date)||own.amount!==cash(c.own_share_amount)||cash(c.insurer_amount)!==cash(c.gross_amount-own.amount))return out(409,{error:"Versicherung oder Eigenanteil geändert. Neu berechnen."});
-   }
+   try{await validateOwnInvoice(db,unit.id,p.organization_id,c,trip)}catch(e){return out(409,{error:e.message})}
    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
    const {data,error}=await db.rpc("issue_case_own_share_invoice",{p_case:c.id,p_unit:unit.id,p_actor:user.id,p_expected_updated_at:c.updated_at||null,p_header:{issuerSnapshot:issuer,dueDate:body.dueDate||null}});
    return error?out(409,{error:error.message}):out(200,data);
