@@ -139,14 +139,14 @@ function SeriesEditor({item,clients,onClose,onSaved,onError}){
 
       <div className="form-grid series-time-grid">
         <label><span>Startdatum</span><input type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)} required/></label>
-        <label><span>Enddatum</span><input type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/></label>
+        <label><span>Enddatum (optional)</span><input type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/></label>
         <label><span>Hinfahrt</span><input type="time" value={form.outboundTime} onChange={e=>set('outboundTime',e.target.value)} required/></label>
         <label><span>Fahrtrichtung</span><select value={form.directions} onChange={e=>set('directions',Number(e.target.value))}><option value="2">Hin & Rück</option><option value="1">Nur eine Richtung</option></select></label>
         {form.directions===2&&<label><span>Rückfahrt</span><input type="time" value={form.returnTime} onChange={e=>set('returnTime',e.target.value)} required/></label>}
         <label className="wide"><span>Notiz</span><textarea rows="2" value={form.notes} onChange={e=>set('notes',e.target.value)}/></label>
       </div>
 
-      <div className="modal-summary"><ShieldCheck size={18}/><span>Beim Speichern erzeugt das System automatisch die einzelnen Hin- und Rückfahrten für die gewählten Wochentage. Doppelte Serienfahrten werden durch die Datenbank verhindert.</span></div>
+      <div className="modal-summary"><ShieldCheck size={18}/><span>Ohne Enddatum läuft die Serie weiter, bis du sie pausierst oder ein Enddatum einträgst. Die Termine werden laufend ergänzt. Vergangene Termine müssen vor der Abrechnung als tatsächlich durchgeführt bestätigt werden.</span></div>
       <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Abbrechen</button><button className="primary-button" disabled={saving||!clients.length}>{saving?'Wird geplant …':'Serie speichern'}</button></div>
     </form>
   </div>;

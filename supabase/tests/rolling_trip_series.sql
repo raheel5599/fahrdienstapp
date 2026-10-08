@@ -1,0 +1,48 @@
+begin;
+do $$
+declare actor uuid; unit_id uuid; org uuid; customer uuid; series uuid; completed uuid; r jsonb; payload jsonb; failed boolean; n integer; historical integer; today date:=(now() at time zone 'Europe/Berlin')::date;
+begin
+ select m.user_id,b.id,b.organization_id into actor,unit_id,org from public.memberships m join public.business_units b on b.id=m.business_unit_id where b.code='fahrdienst' and public.finance_actor_allowed(m.user_id,b.id) limit 1;
+ assert actor is not null;
+ insert into public.customers(organization_id,home_business_unit_id,first_name,last_name) values(org,unit_id,'QA','RollingSeries') returning id into customer;
+ insert into public.customer_business_units(customer_id,business_unit_id) values(customer,unit_id) on conflict do nothing;
+ payload:=jsonb_build_object('customerId',customer,'startDate','2026-09-01','endDate','','weekdays',jsonb_build_array(1,3,5),'outboundTime','08:00','returnTime','13:00','directions',2,'originAddress','QA A','destinationAddress','QA B');
+ failed:=false;begin perform public.manage_trip_series_schedule(unit_id,gen_random_uuid(),'create_series',null,payload);exception when others then failed:=true;end;assert failed,'Unauthorized schedule';
+ r:=public.manage_trip_series_schedule(unit_id,actor,'create_series',null,payload);series:=(r->>'id')::uuid;
+ select count(*) into n from generate_series('2026-09-01'::date::timestamp,(today+90)::timestamp,interval '1 day') d where extract(isodow from d)::integer in (1,3,5);
+ assert(select count(*)=n*2 from public.trips where series_id=series),'NULL end date did not generate MWF both directions';
+ assert(select count(*)=26 from public.trips where series_id=series and service_date between '2026-09-01' and '2026-09-30'),'September historical directions';
+ assert(select bool_and(status='offen') from public.trips where series_id=series),'Automatically completed historical trips';
+ assert(select count(*)=0 from public.trip_billing_cases where customer_id=customer),'Automatically billed planned trips';
+ assert private.fill_trip_series(series,true)=0,'Duplicate generation';
+ select count(*) into historical from public.trips where series_id=series and service_date<today;
+ insert into public.trips(business_unit_id,customer_id,series_id,service_date,scheduled_time,direction,trip_type,from_address,to_address,status) values(unit_id,customer,series,today+91,'09:00','outbound','Dialyse','QA A','QA B','abgeschlossen') returning id into completed;
+ payload:=payload||jsonb_build_object('weekdays',jsonb_build_array(2,4),'outboundTime','10:00');
+ perform public.manage_trip_series_schedule(unit_id,actor,'update_series',series,payload);
+ assert(select count(*)=historical from public.trips where series_id=series and service_date<today),'Edit deleted historical trips';
+ assert(select bool_and(extract(isodow from service_date)::integer in (2,4) and (direction='return' or scheduled_time='10:00')) from public.trips where series_id=series and service_date>=today and status='offen'),'Edit did not update future schedule';
+ assert exists(select 1 from public.trips where id=completed and status='abgeschlossen'),'Edit deleted completed trip';
+ perform public.manage_trip_series_schedule(unit_id,actor,'set_series_active',series,'{"active":false}');
+ assert(select count(*)=0 from public.trips where series_id=series and service_date>=today and status='offen'),'Pause left future open trips';
+ assert(select count(*)=historical from public.trips where series_id=series and service_date<today),'Pause deleted history';
+ assert private.fill_trip_series(series,true)=0,'Paused series regenerated';
+ perform public.manage_trip_series_schedule(unit_id,actor,'set_series_active',series,'{"active":true}');
+ assert(select count(*)>0 from public.trips where series_id=series and service_date>=today and status='offen'),'Resume did not generate';
+ assert(select count(*)=historical from public.trips where series_id=series and service_date<today),'Resume backfilled paused history';
+ -- The clock moves well beyond the old 370-day lifetime; NULL end date still runs.
+ perform private.fill_trip_series(series,false,today+500);
+ assert exists(select 1 from public.trips where series_id=series and service_date>today+500),'Indefinite series stopped after a year';
+ assert private.fill_trip_series(series,false,today+500)=0,'Daily extension duplicated trips';
+ payload:=payload||jsonb_build_object('endDate',today+10);
+ perform public.manage_trip_series_schedule(unit_id,actor,'update_series',series,payload);
+ assert not exists(select 1 from public.trips where series_id=series and status='offen' and service_date>today+10),'End date ignored';
+ assert exists(select 1 from public.trips where id=completed),'End date erased completed evidence';
+ failed:=false;begin perform public.manage_trip_series_schedule(unit_id,actor,'update_series',series,payload||'{"endDate":"2026-08-01"}');exception when others then failed:=true;end;assert failed,'Invalid end date accepted';
+ failed:=false;begin perform public.manage_trip_series_schedule(unit_id,actor,'create_series',null,payload||'{"returnTime":""}');exception when others then failed:=true;end;assert failed,'Missing return time accepted';
+ assert not has_function_privilege('authenticated','public.manage_trip_series_schedule(uuid,uuid,text,uuid,jsonb)','execute');
+ assert not has_function_privilege('anon','private.fill_trip_series(uuid,boolean,date)','execute');
+ assert not has_function_privilege('service_role','private.refresh_trip_series(date)','execute');
+ assert exists(select 1 from cron.job where jobname='tariq-trip-series-daily' and active),'Daily schedule absent';
+end;$$;
+rollback;
+select 'rolling_series_passed' as result;
