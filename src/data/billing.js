@@ -1,3 +1,4 @@
+import {readPages,readByIds} from './readPages.js';
 import {APP_CONFIG} from '../config/app.js';
 import {supabase} from '../lib/supabase.js';
 import {composeBillingPosition} from '../../supabase/functions/_shared/contracts.js';
@@ -12,19 +13,19 @@ const round=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 
 export async function loadBilling(){
   const u=await unit();
-  const {data:cases,error}=await supabase.from('trip_billing_cases').select('*').eq('business_unit_id',u.id).order('created_at',{ascending:false});
-  if(error)throw error;
-  const rows=cases||[], tripIds=[...new Set(rows.map(x=>x.trip_id).filter(Boolean))], customerIds=[...new Set(rows.map(x=>x.customer_id).filter(Boolean))];
-  const insurerIds=[...new Set(rows.map(x=>x.insurer_id).filter(Boolean))], contractIds=[...new Set(rows.map(x=>x.contract_id).filter(Boolean))];
-  const [trips,customers,insurers,contracts]=await Promise.all([
-    tripIds.length?supabase.from('trips').select('*').in('id',tripIds):Promise.resolve({data:[]}),
-    customerIds.length?supabase.from('customers').select('id,first_name,last_name').in('id',customerIds):Promise.resolve({data:[]}),
-    insurerIds.length?supabase.from('health_insurers').select('id,name,short_name').in('id',insurerIds):Promise.resolve({data:[]}),
-    contractIds.length?supabase.from('payer_contracts').select('*').in('id',contractIds):Promise.resolve({data:[]})
+  const rows=await readPages(()=>supabase.from('trip_billing_cases').select('*',{count:'exact'}).eq('business_unit_id',u.id).order('created_at',{ascending:false}).order('id'));
+  const tripIds=[...new Set(rows.map(x=>x.trip_id).filter(Boolean))],customerIds=[...new Set(rows.map(x=>x.customer_id).filter(Boolean))];
+  const insurerIds=[...new Set(rows.map(x=>x.insurer_id).filter(Boolean))],contractIds=[...new Set(rows.map(x=>x.contract_id).filter(Boolean))];
+  const [trips,customers,insurers,contracts,rates]=await Promise.all([
+    readByIds(tripIds,ids=>supabase.from('trips').select('*',{count:'exact'}).eq('business_unit_id',u.id).in('id',ids).order('id')),
+    readByIds(customerIds,ids=>supabase.from('customers').select('id,first_name,last_name',{count:'exact'}).in('id',ids).order('id')),
+    readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name',{count:'exact'}).in('id',ids).order('id')),
+    readByIds(contractIds,ids=>supabase.from('payer_contracts').select('*',{count:'exact'}).in('id',ids).order('id')),
+    readByIds(contractIds,ids=>supabase.from('contract_rates').select('*',{count:'exact'}).in('contract_id',ids).eq('active',true).order('sort_order').order('id'))
   ]);
-  let rates=[]; if(contractIds.length){const r=await supabase.from('contract_rates').select('*').in('contract_id',contractIds).eq('active',true).order('sort_order');if(r.error)throw r.error;rates=r.data||[];}
-  return {unit:u,cases:rows,trips:trips.data||[],customers:customers.data||[],insurers:insurers.data||[],contracts:contracts.data||[],rates};
+  return {unit:u,cases:rows,trips,customers,insurers,contracts,rates};
 }
+
 async function invoke(body){
  const {data,error}=await supabase.functions.invoke('manage-trip-billing',{body:{...body,businessUnitCode:APP_CONFIG.businessUnitCode}});
  if(error){let message=error.message;try{message=(await error.context.json()).error||message;}catch{}return {ok:false,message};}

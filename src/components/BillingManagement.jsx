@@ -3,11 +3,13 @@ import {BadgeEuro,CheckCircle2,FileWarning,ReceiptText,RefreshCw,Save,X} from 'l
 import {createCaseInvoice,createOwnShareReceipt,recalculateCase} from '../data/billing.js';
 import {tariffUnits} from '../../supabase/functions/_shared/tariffs.js';
 import DocumentPreview from './DocumentPreview.jsx';
+import BillingBatch from './BillingBatch.jsx';
 import {renderInvoice,renderReceipt} from '../lib/printFinanceDocuments.js';
 const actions={recalculate:recalculateCase,invoice:createCaseInvoice,receipt:createOwnShareReceipt};
 const euro=v=>Number(v||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 const status={review:'Prüfen',ready:'Bereit',invoiced:'Abgerechnet',completed:'Erledigt',blocked:'Gesperrt'};
 export default function BillingManagement({data,financeData,onFinanceRefresh,api=actions}){
+ const [view,setView]=useState('cases');
  const[payerType,setPayerType]=useState('insurer'),[pendingPreview,setPendingPreview]=useState(null),[preview,setPreview]=useState(null),[receiptTarget,setReceiptTarget]=useState(null),[paymentMethod,setPaymentMethod]=useState('cash');
  useEffect(()=>{if(!pendingPreview||!financeData)return;const docs=pendingPreview.kind==='receipt'?financeData.receipts:financeData.invoices;const doc=docs?.find(x=>x.id===pendingPreview.id);if(doc){setPreview({kind:pendingPreview.kind,doc});setPendingPreview(null)}},[pendingPreview,financeData]);
  const[selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -17,6 +19,8 @@ export default function BillingManagement({data,financeData,onFinanceRefresh,api
  async function invoice(item){setBusy(true);setError('');const r=await api.invoice(item,data);if(!r.ok)setError(r.message);else{await Promise.all([data.refresh(),onFinanceRefresh?.()]);setSelected(null);setPendingPreview({kind:'invoice',id:r.data?.id});}setBusy(false)}
  async function receipt(item){setBusy(true);setError('');const r=await api.receipt(item,data,paymentMethod);if(!r.ok)setError(r.message);else{await Promise.all([data.refresh(),onFinanceRefresh?.()]);setReceiptTarget(null);setPendingPreview({kind:'receipt',id:r.data?.id});}setBusy(false)}
  return <section className="billing-page">
+  <div className="batch-tabs"><button className={view==='cases'?'primary-button':'secondary-button'} aria-pressed={view==='cases'} onClick={()=>setView('cases')}>Einzelabrechnungen</button><button className={view==='batch'?'primary-button':'secondary-button'} aria-pressed={view==='batch'} onClick={()=>setView('batch')}>Sammelabrechnung</button></div>
+  {view==='batch'?<BillingBatch/>:<>
   <div className="billing-kpis"><div><FileWarning/><span><strong>{totals.review}</strong>zu prüfen</span></div><div><CheckCircle2/><span><strong>{totals.ready}</strong>bereit</span></div><div><BadgeEuro/><span><strong>{euro(totals.gross)}</strong>Fahrtenwert</span></div></div>
   {error&&<div className="users-error">{error}</div>}{data.error&&<div className="users-error">{data.error}</div>}
   <div className="billing-table">
@@ -38,6 +42,7 @@ export default function BillingManagement({data,financeData,onFinanceRefresh,api
    {payerType==='insurer'&&selected.tariff_breakdown?.length>0&&<div className="billing-tariff-lines"><h3>Gespeicherte Berechnung</h3>{selected.tariff_breakdown.map((line,index)=><div key={index}><span><b>{line.position_code}</b> {line.label}<small>{Number(line.quantity).toLocaleString('de-DE',{maximumFractionDigits:4})} {tariffUnits[line.unit]||line.unit} × {euro(line.price)}</small></span><strong>{euro(line.amount)}</strong></div>)}<div><span>Fahrtenwert</span><strong>{euro(selected.gross_amount)}</strong></div><div><span>Abzug Eigenanteil</span><strong>− {euro(selected.own_share_amount)}</strong></div><div><b>Kassenbetrag</b><strong>{euro(selected.insurer_amount)}</strong></div></div>}
    {selected.review_message&&<div className="billing-review-note">{selected.review_message}</div>}{error&&<div className="users-error">{error}</div>}<div className="modal-actions"><span/><button type="button" className="secondary-button" onClick={()=>setSelected(null)}>Abbrechen</button><button className="primary-button" disabled={busy||Boolean(selected.invoice_id)}><Save size={17}/>{busy?'Berechnet …':'Neu berechnen & speichern'}</button></div></form></div>}
  {receiptTarget&&<div className="modal-layer"><button className="modal-backdrop" disabled={busy} onClick={()=>setReceiptTarget(null)}/><form role="dialog" aria-modal="true" aria-label="Eigenanteil quittieren" className="modal-card compact-modal billing-check-modal" onSubmit={e=>{e.preventDefault();receipt(receiptTarget)}}><div className="modal-head"><h2>Eigenanteil quittieren</h2><button type="button" className="icon-button" disabled={busy} aria-label="Schließen" onClick={()=>setReceiptTarget(null)}><X/></button></div><p>{tripById[receiptTarget.trip_id]?.direction==='return'?'Rückfahrt':'Hinfahrt'}: <strong>{euro(receiptTarget.own_share_amount)}</strong></p><label><span>Zahlungsart</span><select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)} disabled={busy}><option value="cash">Bar</option><option value="card">Karte</option></select></label><label className="refund-confirmation"><input type="checkbox" required disabled={busy}/>Der Eigenanteil wurde vollständig bezahlt.</label>{error&&<div className="users-error" role="alert">{error}</div>}<div className="modal-actions"><span/><button type="button" disabled={busy} className="secondary-button" onClick={()=>setReceiptTarget(null)}>Abbrechen</button><button className="primary-button" disabled={busy}>{busy?'Speichert …':'Quittung erstellen'}</button></div></form></div>}
+ </>}
  {preview&&<DocumentPreview title={preview.kind==='receipt'?`Quittung ${preview.doc.receipt_number}`:`Rechnung ${preview.doc.invoice_number}`} html={preview.kind==='receipt'?renderReceipt(preview.doc):renderInvoice(preview.doc,financeData?.invoiceItems||[])} onClose={()=>setPreview(null)}/>}
  </section>;
 }
