@@ -1,3 +1,4 @@
+import DocumentManagement from './DocumentManagement.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {
   BadgeEuro,CalendarDays,FileCheck2,MapPin,Plus,Search,ShieldCheck,
@@ -14,7 +15,7 @@ const mobilityLabel={
   other:'Sonstiges'
 };
 
-export default function ClientManagement({data}){
+export default function ClientManagement({data,trips=[]}){
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState(null);
   const [editor,setEditor]=useState(null);
@@ -98,9 +99,11 @@ export default function ClientManagement({data}){
               <Tab active={tab==='overview'} onClick={()=>setTab('overview')} icon={UsersRound} text="Übersicht"/>
               <Tab active={tab==='insurance'} onClick={()=>setTab('insurance')} icon={ShieldCheck} text="Kasse"/>
               <Tab active={tab==='destinations'} onClick={()=>setTab('destinations')} icon={MapPin} text="Ziele"/>
+              <Tab active={tab==='documents'} onClick={()=>setTab('documents')} icon={FileCheck2} text="Originalbelege"/>
               <Tab active={tab==='approvals'} onClick={()=>setTab('approvals')} icon={FileCheck2} text="Verordnung"/>
             </div>
 
+            {tab==='documents'&&<DocumentManagement key={selected.id} clients={[selected]} customerId={selected.id} trips={trips}/>}
             {tab==='overview'&&<Overview client={selected}/>}
             {tab==='insurance'&&<InsuranceTab client={selected} onSaved={()=>refresh('Kassendaten wurden gespeichert.')} onError={setError}/>}
             {tab==='destinations'&&<DestinationTab client={selected} onSaved={()=>refresh('Ziel wurde gespeichert.')} onError={setError}/>}

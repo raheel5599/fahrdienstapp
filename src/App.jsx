@@ -1,3 +1,4 @@
+import DocumentManagement from './components/DocumentManagement.jsx';
 import BusinessSettings from './components/BusinessSettings.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -206,7 +207,9 @@ function App() {
           ) : active === 'benutzer' && can(PERMISSIONS.USERS_MANAGE) ? (
             <UserManagement drivers={drivers} currentUser={user} />
           ) : active === 'kunden' && can(PERMISSIONS.CUSTOMERS_MANAGE) ? (
-            <ClientManagement data={clientData} />
+            <ClientManagement data={clientData} trips={dispatchData.trips} />
+          ) : active === 'dokumente' && can(PERMISSIONS.DOCUMENTS_MANAGE) ? (
+            <DocumentManagement clients={clientData.clients} trips={dispatchData.trips} />
           ) : active === 'rechnungen' && can(PERMISSIONS.INVOICES_MANAGE) ? (
             <div><div className="module-tabs finance-tabs" aria-label="Finanzdokumente"><button className={financeTab==='invoices'?'active':''} onClick={()=>setFinanceTab('invoices')}>Rechnungen</button><button className={financeTab==='receipts'?'active':''} onClick={()=>setFinanceTab('receipts')}>Quittungen</button></div>{financeTab==='invoices'?<InvoiceManagement data={financeData} clients={clientData.clients} contracts={contractData} />:<ReceiptManagement data={financeData} clients={clientData.clients} />}</div>
           ) : active === 'abrechnung' && can(PERMISSIONS.BILLING_MANAGE) ? (
