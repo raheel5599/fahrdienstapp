@@ -18,3 +18,6 @@ export async function loadSubmissionsWithDocuments(){
  const runs=await loadSubmissions();const reports=await inspectBillingDocuments(runs.filter(r=>['prepared','web_entered'].includes(r.status)).flatMap(r=>r.rows_snapshot.map(x=>x.id)));
  return runs.map(run=>({...run,documentReports:run.rows_snapshot.map(row=>reports.find(r=>r.caseId===row.id)).filter(Boolean)}));
 }
+export const loadInsurerPaymentReport=submissionId=>invoke({action:'insurer_payment_report',submissionId});
+export const recordInsurerPayment=(submissionId,input)=>invoke({action:'record_insurer_payment',submissionId,...input,confirmed:true});
+export const cancelInsurerPayment=(paymentId,reason)=>invoke({action:'cancel_insurer_payment',paymentId,reason,confirmed:true});

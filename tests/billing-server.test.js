@@ -134,3 +134,8 @@ test('document review requires confirmation, derives actor/unit and rejects driv
  r=await call('manage-finance',s,{action:'save_billing_document_check',confirmed:true,selection:{approvalRequired:false,note:'Testvermerk'},versions:{}});assert.equal(r.status,200);assert.equal(s.writes[1].rpc,'save_billing_document_check');
  s.rows.memberships[0].role='driver';assert.equal((await call('manage-finance',s,{action:'inspect_billing_documents',caseIds:['case']})).status,403);
 });
+test('insurer payment register requires actual confirmation and scopes authenticated actor',async()=>{
+ const s=database();let r=await call('manage-finance',s,{action:'record_insurer_payment',submissionId:'run',entries:[]});assert.equal(r.status,400);assert.equal(s.writes.length,0);
+ r=await call('manage-finance',s,{action:'record_insurer_payment',submissionId:'run',confirmed:true,requestId:'id',date:'2026-10-08',amount:60,reference:'BANK',entries:[]});assert.equal(r.status,200);assert.equal(s.writes[0].rpc,'record_insurer_payment');assert.equal(s.writes[0].args.p_actor,'user');assert.equal(s.writes[0].args.p_unit,'unit');
+ s.rows.memberships[0].role='driver';assert.equal((await call('manage-finance',s,{action:'insurer_payment_report',submissionId:'run'})).status,403);
+});

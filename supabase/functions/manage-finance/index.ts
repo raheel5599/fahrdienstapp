@@ -29,6 +29,13 @@ Deno.serve(async(req:Request)=>{
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
 
+  if(["insurer_payment_report","record_insurer_payment","cancel_insurer_payment"].includes(body.action)){
+    if(body.action!=="insurer_payment_report"&&body.confirmed!==true)return out(400,{error:"Tatsächlichen Zahlungseingang oder Korrektur bestätigen."});
+    const params=body.action==="insurer_payment_report"?{p_unit:unit.id,p_actor:u.user.id,p_submission:body.submissionId}:body.action==="record_insurer_payment"?{p_unit:unit.id,p_actor:u.user.id,p_submission:body.submissionId,p_request:body.requestId,p_date:body.date,p_amount:body.amount,p_reference:body.reference,p_note:body.note||"",p_entries:body.entries}:{p_unit:unit.id,p_actor:u.user.id,p_payment:body.paymentId,p_reason:body.reason};
+    const {data,error}=await db.rpc(body.action,params);
+    return error?out(409,{error:error.message}):out(200,data);
+  }
+
   if(body.action==="inspect_billing_documents"||body.action==="save_billing_document_check"){
     if(body.action==="save_billing_document_check"&&body.confirmed!==true)return out(400,{error:"Inhalt und Zuordnung der Belege bestätigen."});
     const name=body.action==="inspect_billing_documents"?"billing_document_report":"save_billing_document_check";
