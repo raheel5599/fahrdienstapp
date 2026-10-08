@@ -29,6 +29,14 @@ Deno.serve(async(req:Request)=>{
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
 
+  if(body.action==="create_submission"||body.action==="update_submission"){
+    if(body.action==="update_submission"&&body.confirmed!==true)return out(400,{error:"Tatsächliche Durchführung bestätigen."});
+    const name=body.action==="create_submission"?"create_billing_submission":"update_billing_submission";
+    const params=body.action==="create_submission"?{p_unit:unit.id,p_actor:u.user.id,p_entries:body.entries}:{p_unit:unit.id,p_actor:u.user.id,p_id:body.id,p_action:body.step,p_date:body.date||null,p_reference:body.reference||""};
+    const {data,error}=await db.rpc(name,params);
+    return error?out(409,{error:error.message}):out(200,data);
+  }
+
   if(body.action==="save_company_profile"){
     if(m.role!=="admin")return out(403,{error:"Nur Administratoren dürfen Unternehmensdaten ändern."});
     let profile;try{profile=normalizeProfile(body.profile)}catch(e){return out(400,{error:e.message})}

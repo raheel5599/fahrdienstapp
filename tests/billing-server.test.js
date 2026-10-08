@@ -120,3 +120,11 @@ test('invalid historical selection creates no writes',async()=>{for(const patch 
 
 test('monthly invoice verifies each patient case and passes reviewed versions with authenticated actor only',async()=>{const setup=database([group]);setup.rows.trip_billing_cases[0].invoice_id='insurer-invoice';const r=await call('manage-trip-billing',setup,{action:'monthly_own_share_invoice',customerId:'customer',month:'2026-10',entries:[{id:'case',updatedAt:'reviewed-version',amount:999}],actor:'forged'});assert.equal(r.status,200);assert.equal(setup.writes[0].rpc,'issue_monthly_own_share_invoice');assert.equal(setup.writes[0].args.p_actor,'user');assert.deepEqual(setup.writes[0].args.p_entries,[{id:'case',updatedAt:'reviewed-version'}]);assert.equal(setup.writes[0].args.p_month,'2026-10-01');});
 test('monthly invoice rejects mixed patient, period, paid receipt and changed tariff before writing',async()=>{for(const patch of [{customerId:'other'},{month:'2026-09'},{month:'2026-99'},{entries:[{id:'case'},{id:'case'}]},{paid:true},{receipt:true},{noContract:true}]){const setup=database(patch.noContract?[]:[group]);if(patch.paid)setup.rows.trip_billing_cases[0].own_share_paid=true;if(patch.receipt)setup.rows.trip_billing_cases[0].receipt_id='r';const r=await call('manage-trip-billing',setup,{action:'monthly_own_share_invoice',customerId:'customer',month:'2026-10',entries:[{id:'case'}],...patch});assert(r.status>=400);assert.equal(setup.writes.length,0);}});
+test('ZAD register derives unit and actor from authentication and requires actual action confirmation',async()=>{
+ const setup=database();
+ let r=await call('manage-finance',setup,{action:'update_submission',id:'run',step:'web',date:'2026-10-08'});
+ assert.equal(r.status,400);assert.equal(setup.writes.length,0);
+ r=await call('manage-finance',setup,{action:'create_submission',p_actor:'forged',entries:[{id:'case'}]});
+ assert.equal(r.status,200);assert.equal(setup.writes[0].rpc,'create_billing_submission');assert.equal(setup.writes[0].args.p_actor,'user');assert.equal(setup.writes[0].args.p_unit,'unit');
+ setup.rows.memberships[0].role='driver';r=await call('manage-finance',setup,{action:'update_submission',id:'run',step:'post',confirmed:true});assert.equal(r.status,403);assert.equal(setup.writes.length,1);
+});
