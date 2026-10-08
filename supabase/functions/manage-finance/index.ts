@@ -29,6 +29,14 @@ Deno.serve(async(req:Request)=>{
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
 
+  if(body.action==="inspect_billing_documents"||body.action==="save_billing_document_check"){
+    if(body.action==="save_billing_document_check"&&body.confirmed!==true)return out(400,{error:"Inhalt und Zuordnung der Belege bestätigen."});
+    const name=body.action==="inspect_billing_documents"?"billing_document_report":"save_billing_document_check";
+    const params=body.action==="inspect_billing_documents"?{p_unit:unit.id,p_actor:u.user.id,p_cases:body.caseIds}:{p_unit:unit.id,p_actor:u.user.id,p_case:body.caseId,p_selection:body.selection,p_versions:body.versions,p_expected_reviewed_at:body.reviewedAt||null};
+    const {data,error}=await db.rpc(name,params);
+    return error?out(409,{error:error.message}):out(200,data);
+  }
+
   if(body.action==="create_submission"||body.action==="update_submission"){
     if(body.action==="update_submission"&&body.confirmed!==true)return out(400,{error:"Tatsächliche Durchführung bestätigen."});
     const name=body.action==="create_submission"?"create_billing_submission":"update_billing_submission";

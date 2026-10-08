@@ -31,6 +31,7 @@ Deno.serve(async(req)=>{
   }
   async function links(customerId,kind){
    if(!await customerAccess(customerId))throw new Error('Kunde gehört nicht zu diesem Geschäftsbereich.');
+   if(kind==='transport_proof'&&!body.tripId)throw new Error('Transportnachweis einer konkreten Fahrt zuordnen.');
    if(body.authorizationId){const {data:a}=await db.from('customer_authorizations').select('id,authorization_type').eq('id',body.authorizationId).eq('customer_id',customerId).maybeSingle();if(!a||a.authorization_type!==kind)throw new Error('Verordnung / Genehmigung gehört nicht zu diesem Kunden oder Dokumenttyp.');}
    if(body.tripId){const {data:t}=await db.from('trips').select('id').eq('id',body.tripId).eq('customer_id',customerId).eq('business_unit_id',unit.id).maybeSingle();if(!t)throw new Error('Fahrt gehört nicht zu diesem Kunden und Geschäftsbereich.');}
    return {authorization_id:body.authorizationId||null,trip_id:body.tripId||null};

@@ -1,3 +1,4 @@
+import BillingDocumentReview from './BillingDocumentReview.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {BadgeEuro,CheckCircle2,FileWarning,ReceiptText,RefreshCw,Save,X} from 'lucide-react';
 import {createCaseInvoice,createOwnShareReceipt,createOwnShareInvoice,recalculateCase} from '../data/billing.js';
@@ -10,7 +11,7 @@ import {renderInvoice,renderReceipt} from '../lib/printFinanceDocuments.js';
 const actions={recalculate:recalculateCase,invoice:createCaseInvoice,receipt:createOwnShareReceipt,ownInvoice:createOwnShareInvoice};
 const euro=v=>Number(v||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 const status={review:'Prüfen',ready:'Bereit',invoiced:'Abgerechnet',completed:'Erledigt',blocked:'Gesperrt'};
-export default function BillingManagement({data,financeData,onFinanceRefresh,api=actions}){
+export default function BillingManagement({data,financeData,onFinanceRefresh,clients=[],trips=[],api=actions}){
  const [ownInvoiceTarget,setOwnInvoiceTarget]=useState(null);
  const [view,setView]=useState('cases');
  const[payerType,setPayerType]=useState('insurer'),[pendingPreview,setPendingPreview]=useState(null),[preview,setPreview]=useState(null),[receiptTarget,setReceiptTarget]=useState(null),[paymentMethod,setPaymentMethod]=useState('cash');
@@ -23,8 +24,8 @@ export default function BillingManagement({data,financeData,onFinanceRefresh,api
  async function receipt(item){setBusy(true);setError('');const r=await api.receipt(item,data,paymentMethod);if(!r.ok)setError(r.message);else{await Promise.all([data.refresh(),onFinanceRefresh?.()]);setReceiptTarget(null);setPendingPreview({kind:'receipt',id:r.data?.id});}setBusy(false)}
  async function ownInvoice(e){e.preventDefault();setBusy(true);setError('');try{const dueDate=new FormData(e.currentTarget).get('dueDate');const r=await api.ownInvoice(ownInvoiceTarget,data,dueDate);if(!r.ok)throw Error(r.message);await Promise.all([data.refresh(),onFinanceRefresh?.()]);setOwnInvoiceTarget(null);setPendingPreview({kind:'invoice',id:r.data?.id});}catch(e){setError(e.message||'Eigenanteilsrechnung konnte nicht erstellt werden.')}finally{setBusy(false)}}
  return <section className="billing-page">
-  <div className="batch-tabs"><button className={view==='cases'?'primary-button':'secondary-button'} aria-pressed={view==='cases'} onClick={()=>setView('cases')}>Einzelabrechnungen</button><button className={view==='batch'?'primary-button':'secondary-button'} aria-pressed={view==='batch'} onClick={()=>setView('batch')}>Sammelabrechnung</button><button className={view==='monthly'?'primary-button':'secondary-button'} aria-pressed={view==='monthly'} onClick={()=>setView('monthly')}>Monatliche Eigenanteile</button><button className={view==='zad'?'primary-button':'secondary-button'} aria-pressed={view==='zad'} onClick={()=>setView('zad')}>ZAD-Übersicht</button></div>
-  {view==='zad'?<SubmissionRegister/>:view==='monthly'?<MonthlyCopay onCreated={()=>Promise.all([data.refresh(),onFinanceRefresh?.()])}/>:view==='batch'?<BillingBatch/>:<>
+  <div className="batch-tabs"><button className={view==='cases'?'primary-button':'secondary-button'} aria-pressed={view==='cases'} onClick={()=>setView('cases')}>Einzelabrechnungen</button><button className={view==='batch'?'primary-button':'secondary-button'} aria-pressed={view==='batch'} onClick={()=>setView('batch')}>Sammelabrechnung</button><button className={view==='monthly'?'primary-button':'secondary-button'} aria-pressed={view==='monthly'} onClick={()=>setView('monthly')}>Monatliche Eigenanteile</button><button className={view==='zad'?'primary-button':'secondary-button'} aria-pressed={view==='zad'} onClick={()=>setView('zad')}>ZAD-Übersicht</button><button className={view==='documents'?'primary-button':'secondary-button'} aria-pressed={view==='documents'} onClick={()=>setView('documents')}>Belegprüfung</button></div>
+  {view==='documents'?<BillingDocumentReview clients={clients} trips={trips}/>:view==='zad'?<SubmissionRegister clients={clients} trips={trips}/>:view==='monthly'?<MonthlyCopay onCreated={()=>Promise.all([data.refresh(),onFinanceRefresh?.()])}/>:view==='batch'?<BillingBatch/>:<>
   <div className="billing-kpis"><div><FileWarning/><span><strong>{totals.review}</strong>zu prüfen</span></div><div><CheckCircle2/><span><strong>{totals.ready}</strong>bereit</span></div><div><BadgeEuro/><span><strong>{euro(totals.gross)}</strong>Fahrtenwert</span></div></div>
   {error&&<div className="users-error">{error}</div>}{data.error&&<div className="users-error">{data.error}</div>}
   <div className="billing-table">

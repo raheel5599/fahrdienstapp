@@ -45,3 +45,8 @@ test('unsupported formats, excessive size and empty files are rejected',()=>{
  for(const override of [{mimeType:'text/html'},{mimeType:'image/svg+xml'},{size:0},{size:10*1024*1024+1},{kind:'unknown'},{fileName:'a'.repeat(181)}])assert.throws(()=>rules.validateDocumentInput({...input,...override}));
  assert.equal(rules.detectDocumentMime(new Uint8Array([137,80,78,71,13,10,26,10])),'image/png');assert.equal(rules.detectDocumentMime(new Uint8Array([255,216,255])),'image/jpeg');
 });
+test('transport proof upload requires exact scoped trip and cannot link an authorization',async()=>{
+ const s=setup();let r=await call(s,{...input,kind:'transport_proof',authorizationId:null,tripId:null});assert.equal(r.status,400);assert.equal(s.writes.length,0);
+ r=await call(s,{...input,kind:'transport_proof',authorizationId:null});assert.equal(r.status,200);assert.equal(s.rows.customer_documents[0].trip_id,'trip');assert.equal(s.rows.customer_documents[0].kind,'transport_proof');
+ const docId=r.body.id;await call(s,{action:'finalize',documentId:docId});r=await call(s,{action:'link',documentId:docId,tripId:null});assert.equal(r.status,400);
+});

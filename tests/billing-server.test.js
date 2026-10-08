@@ -128,3 +128,9 @@ test('ZAD register derives unit and actor from authentication and requires actua
  assert.equal(r.status,200);assert.equal(setup.writes[0].rpc,'create_billing_submission');assert.equal(setup.writes[0].args.p_actor,'user');assert.equal(setup.writes[0].args.p_unit,'unit');
  setup.rows.memberships[0].role='driver';r=await call('manage-finance',setup,{action:'update_submission',id:'run',step:'post',confirmed:true});assert.equal(r.status,403);assert.equal(setup.writes.length,1);
 });
+test('document review requires confirmation, derives actor/unit and rejects driver inspection',async()=>{
+ const s=database();let r=await call('manage-finance',s,{action:'save_billing_document_check',selection:{}});assert.equal(r.status,400);assert.equal(s.writes.length,0);
+ r=await call('manage-finance',s,{action:'inspect_billing_documents',caseIds:['case']});assert.equal(r.status,200);assert.equal(s.writes[0].args.p_actor,'user');assert.equal(s.writes[0].args.p_unit,'unit');
+ r=await call('manage-finance',s,{action:'save_billing_document_check',confirmed:true,selection:{approvalRequired:false,note:'Testvermerk'},versions:{}});assert.equal(r.status,200);assert.equal(s.writes[1].rpc,'save_billing_document_check');
+ s.rows.memberships[0].role='driver';assert.equal((await call('manage-finance',s,{action:'inspect_billing_documents',caseIds:['case']})).status,403);
+});

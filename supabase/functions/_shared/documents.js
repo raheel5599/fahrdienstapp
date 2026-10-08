@@ -3,7 +3,7 @@ export const MAX_DOCUMENT_SIZE=10*1024*1024;
 export const DOCUMENT_TYPES={'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 export function validateDocumentInput(body){
  const kind=body.kind;
- if(!['prescription','approval','other'].includes(kind))throw new Error('Dokumentart fehlt.');
+ if(!['prescription','approval','transport_proof','other'].includes(kind))throw new Error('Dokumentart fehlt.');
  const mime=body.mimeType,size=Number(body.size);
  if(!Object.hasOwn(DOCUMENT_TYPES,mime))throw new Error('Bitte PDF, JPEG, PNG oder WebP verwenden.');
  if(!Number.isInteger(size)||size<1||size>MAX_DOCUMENT_SIZE)throw new Error('Dateien dürfen höchstens 10 MB groß sein.');
