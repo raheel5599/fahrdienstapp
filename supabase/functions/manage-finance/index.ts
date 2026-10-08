@@ -124,8 +124,8 @@ Deno.serve(async(req:Request)=>{
   }
   if(body.action==="set_invoice_status"){
     if(!body.invoiceId||body.status!=="paid")return out(400,{error:"Storno benötigt einen eigenen Beleg und Stornogrund."});
-    const {data,error}=await db.from("invoices").update({status:"paid",paid_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",body.invoiceId).eq("business_unit_id",unit.id).eq("status","open").eq("document_type","invoice").select("id").maybeSingle();
-    return error||!data?out(409,{error:error?.message||"Nur eine offene Rechnung kann als bezahlt erfasst werden."}):out(200,{ok:true});
+    const {data,error}=await db.rpc("mark_finance_invoice_paid",{p_invoice:body.invoiceId,p_unit:unit.id,p_actor:u.user.id});
+    return error?out(409,{error:error.message}):out(200,data);
   }
 
   if(body.action==="create_receipt"){

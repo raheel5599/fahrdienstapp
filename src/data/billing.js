@@ -35,3 +35,5 @@ async function invoke(body){
 export async function recalculateCase(item,input){const r=await invoke({action:'recalculate',caseId:item.id,...input});if(!r.ok)throw new Error(r.message);return r.data.case;}
 export const createCaseInvoice=item=>invoke({action:'invoice',caseId:item.id});
 export const createOwnShareReceipt=(item,context,paymentMethod='cash')=>invoke({action:'own_share_receipt',caseId:item.id,paymentMethod});
+
+export const createOwnShareInvoice=(item,context,dueDate)=>invoke({action:'own_share_invoice',caseId:item.id,dueDate});
