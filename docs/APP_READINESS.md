@@ -19,7 +19,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 | --- | --- | --- |
 | Hoch | Rechnungsdaten | Unternehmensprofil und Vorlage implementiert. Administrator muss die tatsächliche Anschrift, Bankverbindung, Kennungen und Hinweise eintragen; alte Belege ohne gespeichertes Profil behalten ihre bisherige Darstellung. |
 | Hoch | Kassenabrechnung | Einzelrechnungen und vertragliche Positionen sind vorhanden. Abrechnungsläufe/Sammelabrechnungen und Übermittlungsexporte an Abrechnungsstellen sind nicht implementiert. Anforderungen der verwendeten Abrechnungsstelle klären. |
-| Hoch | Storno und Korrektur | Server unterstützt einfache Statusänderungen. In der Oberfläche fehlt ein vollständiger, nachvollziehbarer Storno-/Korrekturprozess mit verknüpften Korrekturbelegen. |
+| Erledigt | Storno und Korrektur | Eigener Stornobeleg mit exakter Gegenbuchung und Originalbezug; verknüpfte Ersatzrechnung, erneut prüfbare Fahrtenfälle, erhaltene Eigenanteilquittung und separate Erfassung ausgeführter Rückzahlungen. |
 | Hoch | Dokumente | Originalbelege können als PDF/JPEG/PNG/WebP hochgeladen, Kunden und Verordnungen/Genehmigungen/Fahrten zugeordnet, angesehen, heruntergeladen, archiviert und wiederhergestellt werden. OCR und ein Fahrer-Upload bleiben separate Erweiterungen. |
 | Hoch | Fachliche Abnahme | Reale Büro-/Fahrerrollen, komplette Fahrt bis Rechnung, Belege und Apple-Druck-/PDF-Dialog auf tatsächlichen iPads/iPhones mit kontrollierten Daten prüfen. UI-Fixtures ersetzen diese Prüfung nicht. |
 | Mittel | Fahrtenhistorie | Live-Disposition zeigt nur den heutigen Tag; der Loader begrenzt Fahrten auf gestern bis 45 Tage voraus. Datumsfilter, ältere Historie und Suche fehlen in dieser Ansicht. |
@@ -44,7 +44,7 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 ## Sinnvolle Reihenfolge
 
 1. Unternehmensprofil fachlich vervollständigen; Originalbelege ergänzen.
-2. Korrekturbelege, Privatfahrtenablauf und Abrechnungsläufe/Exporte.
+2. Privatfahrtenablauf und Abrechnungsläufe/Exporte.
 3. Historie, Filter, Buchhaltung und Berichte.
 4. Kommunikation, Einstellungen, echte Suche und danach optional Offlinebetrieb/GPS.
 
@@ -65,3 +65,13 @@ Die App ist noch kein vollständig fertiges Gesamtsystem. Dieser Stand beruht au
 - Dokumentliste lädt jeweils 50 Datensätze mit Filtern und Weitere-laden-Aktion. Fahrt-Auswahl verwendet den vorhandenen Dispositionszeitraum; ältere bereits gespeicherte Zuordnungen bleiben erhalten.
 - Unterbrochene Uploads werden nicht als aktive Belege angezeigt. Fehlgeschlagene Uploads versucht die Oberfläche abzubrechen und aufzuräumen; bei Abbruch durch Schließen des Browsers können unvollständige private Uploads verbleiben. Automatische zeitgesteuerte Bereinigung ist noch offen.
 - 56 Server-/Dokument-/Uploadtests; lokale Browser-Fixtures prüfen Mehrfachupload, Zuordnung, PDF-/Bildvorschau, Downloadaktion sowie Archiv/Wiederherstellung mit ausschließlich fiktiven Daten. Fachliche Abnahme mit tatsächlichen Belegen und Geräten bleibt offen.
+
+## Storno und Korrektur ergänzt
+
+- Offene und bezahlte Rechnungen können mit Pflichtgrund storniert werden. Ein eigener ST-Beleg übernimmt ursprüngliche Angaben und Positionen mit exakt umgekehrten Beträgen. Originalbeleg und Positionen bleiben erhalten.
+- Manuelle Rechnungen erhalten eine bearbeitbare Ersatzrechnung mit neuer RE-Nummer und Originalbezug. Kassenfahrten werden über ihren Abrechnungsfall erneut geprüft und berechnet; die neue Rechnung verweist automatisch auf die stornierte Rechnung.
+- Bereits quittierte Eigenanteile bleiben samt Zahlungsstatus und Quittung am Fall erhalten. Ein geänderter Eigenanteil ist bis zur gesonderten Klärung der bestehenden Quittung gesperrt.
+- Bei bezahlten Originalen ist eine Rückzahlung offen. Der Benutzer bestätigt eine tatsächlich ausgeführte vollständige Rückzahlung und hinterlegt einen Zahlungsnachweis. Die App führt keine Banküberweisung aus und verrechnet keine Zahlung automatisch mit der Ersatzrechnung.
+- Storno und Erstellung der Fahrten-/Ersatzrechnung sind Datenbanktransaktionen. Sperren, eindeutige Referenzen und Versionsprüfung verhindern Doppelbelege und Teilstände. RPC-Ausführung ist auf den Server beschränkt und prüft aktive Büro-/Chefberechtigung im Geschäftsbereich.
+- Historische Rechnungen, die vor dieser Änderung nur den Status Storniert erhielten, werden nicht rückwirkend mit neuen Belegen ergänzt.
+- 60 automatisierte Server-/Dokumenttests und SQL-Transaktionsprüfung mit anschließendem Rollback: exakte Gegenbuchung einschließlich Eigenanteilabzug, Erhalt quittierter Eigenanteile, Rückzahlung, Ersatzrechnung mit MwSt., Wiederholung, Berechtigungen und veraltete Fälle. Browser-Fixtures prüfen Storno, Vorschau, Rückzahlung und Ersatzrechnung auf den fünf Bildschirmgrößen.

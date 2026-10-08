@@ -88,11 +88,9 @@ Deno.serve(async(req)=>{
    const [{data:customer},{data:insurer}]=await Promise.all([db.from("customers").select("*").eq("id",c.customer_id).maybeSingle(),db.from("health_insurers").select("*").eq("id",c.insurer_id).maybeSingle()]); if(!customer||!insurer)return out(400,{error:"Kunde oder Krankenkasse fehlt."});
    const amount=cash(c.insurer_amount),desc=[c.billing_position?"Pos. "+c.billing_position:null,trip.trip_type,trip.service_date,trip.from_address+" → "+trip.to_address].filter(Boolean).join(" · ");
    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
-   const {data:i,error}=await db.from("invoices").insert({business_unit_id:unit.id,issuer_snapshot:issuer,customer_id:c.customer_id,insurer_id:c.insurer_id,service_date:trip.service_date,payer_type:"insurer",payer_name:insurer.name,customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),customer_address:[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),status:"open",issue_date:new Date().toISOString().slice(0,10),net_total:amount,vat_total:0,gross_total:amount,created_by:user.id}).select("id,document_seq").single();
-   if(error||!i)return out(400,{error:error?.message||"Rechnung fehlgeschlagen."}); const no="RE-"+new Date().getFullYear()+"-"+String(i.document_seq).padStart(5,"0"); await db.from("invoices").update({invoice_number:no}).eq("id",i.id);
-   const positions=c.tariff_breakdown?.length?invoiceTariffItems(c.tariff_breakdown,cash(c.own_share_amount),trip,i.id):[{invoice_id:i.id,trip_id:trip.id,description:desc,quantity:1,unit:"Fahrt",unit_gross:amount,vat_rate:0,net_total:amount,vat_total:0,gross_total:amount}];
-   const {error:ie}=await db.from("invoice_items").insert(positions); if(ie){await db.from("invoices").delete().eq("id",i.id);return out(400,{error:ie.message})}
-   await db.from("trip_billing_cases").update({invoice_id:i.id,billing_status:"invoiced",updated_at:new Date().toISOString()}).eq("id",c.id); return out(200,{ok:true,invoiceNumber:no});
+   const positions=c.tariff_breakdown?.length?invoiceTariffItems(c.tariff_breakdown,cash(c.own_share_amount),trip,null):[{trip_id:trip.id,description:desc,quantity:1,unit:"Fahrt",unit_gross:amount,vat_rate:0,net_total:amount,vat_total:0,gross_total:amount}];
+   const {data,error}=await db.rpc("issue_case_finance_invoice",{p_case:c.id,p_unit:unit.id,p_actor:user.id,p_expected_updated_at:c.updated_at||null,p_header:{payerName:insurer.name,customerName:[customer.first_name,customer.last_name].filter(Boolean).join(" "),customerAddress:[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),serviceDate:trip.service_date,issuerSnapshot:issuer},p_items:positions});
+   return error?out(409,{error:error.message}):out(200,data);
  }
  return out(400,{error:"Unbekannte Aktion."});
 });

@@ -1,0 +1,36 @@
+begin;
+do $$
+declare actor uuid; unit_id uuid; org uuid; customer uuid; trip uuid; receipt uuid; invoice uuid; cancellation uuid; replacement uuid; billing uuid; response jsonb; stamp timestamptz; failed boolean;
+begin
+ select m.user_id,b.id,b.organization_id into actor,unit_id,org from public.memberships m join public.business_units b on b.id=m.business_unit_id where b.code='fahrdienst' and public.finance_actor_allowed(m.user_id,b.id) limit 1;
+ assert actor is not null,'Test requires an active office/admin';
+ insert into public.customers(organization_id,home_business_unit_id,first_name,last_name) values(org,unit_id,'QA','Correction') returning id into customer;
+ insert into public.trips(business_unit_id,customer_id,service_date,scheduled_time,trip_type,from_address,to_address) values(unit_id,customer,current_date,'09:00','Dialyse','QA A','QA B') returning id into trip;
+ insert into public.receipts(business_unit_id,received_from,purpose,amount,customer_id) values(unit_id,'QA','Eigenanteil',5,customer) returning id into receipt;
+ insert into public.invoices(business_unit_id,customer_id,payer_type,payer_name,status,issue_date,service_date,net_total,vat_total,gross_total,invoice_number) values(unit_id,customer,'private','QA','paid',current_date,current_date,19,0,19,'QA-ORIGINAL') returning id into invoice;
+ insert into public.invoice_items(invoice_id,trip_id,description,quantity,unit,unit_gross,vat_rate,net_total,vat_total,gross_total,item_kind) values(invoice,trip,'Fahrt',8,'km',3,0,24,0,24,'charge'),(invoice,trip,'Eigenanteil',1,'Fahrt',-5,0,-5,0,-5,'own_share_deduction');
+ insert into public.trip_billing_cases(business_unit_id,trip_id,customer_id,invoice_id,receipt_id,billing_status,gross_amount,own_share_amount,insurer_amount,own_share_paid) values(unit_id,trip,customer,invoice,receipt,'invoiced',24,5,19,true) returning id into billing;
+ response=public.cancel_finance_invoice(invoice,unit_id,actor,'QA falscher Betrag');cancellation=(response->>'id')::uuid;
+ assert (select gross_total=-19 and refund_amount=19 and refund_status='due' and reversal_of_id=invoice from public.invoices where id=cancellation),'Cancellation and refund incorrect';
+ assert not exists(select 1 from public.invoice_items a join public.invoice_items b on b.reversal_source_item_id=a.id where a.invoice_id=invoice and (a.gross_total+b.gross_total<>0 or a.unit_gross+b.unit_gross<>0 or a.net_total+b.net_total<>0 or a.vat_total+b.vat_total<>0 or a.quantity<>b.quantity)),'Not an exact inverse';
+ assert (select count(*)=2 from public.invoice_items where invoice_id=cancellation),'Missing reversal items';
+ assert (select invoice_id is null and last_cancelled_invoice_id=invoice and billing_status='review' and receipt_id=receipt and own_share_paid and own_share_amount=5 from public.trip_billing_cases where id=billing),'Copay or case lost';
+ assert (public.cancel_finance_invoice(invoice,unit_id,actor,'QA repeated')->>'id')::uuid=cancellation,'Duplicate cancellation';
+ failed=false;begin perform public.cancel_finance_invoice(invoice,unit_id,gen_random_uuid(),'QA unauthorized');exception when others then failed=true;end;assert failed,'Unauthorized cancellation allowed';
+ perform public.record_invoice_refund(cancellation,unit_id,actor,'QA bank reference');assert(select refund_status='refunded' from public.invoices where id=cancellation),'Refund not recorded';
+ update public.trip_billing_cases set billing_status='ready',updated_at=clock_timestamp() where id=billing returning updated_at into stamp;
+ failed=false;begin perform public.issue_case_finance_invoice(billing,unit_id,actor,stamp-interval '1 second','{}','[]');exception when others then failed=true;end;assert failed,'Stale case allowed';
+ response=public.issue_case_finance_invoice(billing,unit_id,actor,stamp,jsonb_build_object('payerName','QA','serviceDate',current_date),jsonb_build_array(jsonb_build_object('description','Fahrt korrigiert','quantity',1,'unit','Fahrt','unit_gross',24,'vat_rate',0,'net_total',24,'vat_total',0,'gross_total',24),jsonb_build_object('description','Eigenanteil','quantity',1,'unit','Fahrt','unit_gross',-5,'vat_rate',0,'net_total',-5,'vat_total',0,'gross_total',-5,'item_kind','own_share_deduction')));replacement=(response->>'id')::uuid;
+ assert(select replaces_invoice_id=invoice and gross_total=19 from public.invoices where id=replacement),'Replacement link incorrect';
+ failed=false;begin perform public.issue_case_finance_invoice(billing,unit_id,actor,stamp,'{}','[]');exception when others then failed=true;end;assert failed,'Duplicate case invoice allowed';
+ insert into public.invoices(business_unit_id,payer_type,payer_name,status,issue_date,service_date,net_total,vat_total,gross_total,invoice_number) values(unit_id,'private','QA manual','open',current_date,current_date,10,0,10,'QA-MANUAL') returning id into invoice;
+ insert into public.invoice_items(invoice_id,description,quantity,unit,unit_gross,vat_rate,net_total,vat_total,gross_total) values(invoice,'QA manual',1,'Fahrt',10,0,10,0,10);
+ perform public.cancel_finance_invoice(invoice,unit_id,actor,'QA manual correction');
+ failed=false;begin perform public.replace_finance_invoice(invoice,unit_id,actor,jsonb_build_object('payerName','QA','serviceDate',current_date),null);exception when others then failed=true;end;assert failed,'Null items allowed';assert not exists(select 1 from public.invoices where replaces_invoice_id=invoice),'Failed operation left a header';
+ response=public.replace_finance_invoice(invoice,unit_id,actor,jsonb_build_object('payerName','QA','serviceDate',current_date),'[{"description":"QA corrected","quantity":2,"unitGross":11.9,"vatRate":19}]');replacement=(response->>'id')::uuid;
+ assert(select net_total=20 and vat_total=3.8 and gross_total=23.8 from public.invoices where id=replacement),'VAT replacement amounts incorrect';
+ assert(public.replace_finance_invoice(invoice,unit_id,actor,'{}','[]')->>'id')::uuid=replacement,'Duplicate manual replacement';
+ assert not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('cancel_finance_invoice','replace_finance_invoice','issue_case_finance_invoice','record_invoice_refund') and (p.prosecdef or has_function_privilege('authenticated',p.oid,'execute') or has_function_privilege('anon',p.oid,'execute'))),'Unsafe function permissions';
+end $$;
+select 'passed: exact inverse, copay preservation, refunds, idempotency, stale and unauthorized rejection, atomic failures, VAT, RPC permissions' as result;
+rollback;

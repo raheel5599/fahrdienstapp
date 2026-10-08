@@ -10,3 +10,7 @@ export const cancelReceipt=receiptId=>invoke({action:'cancel_receipt',receiptId}
 
 export async function loadCompanyProfile(){const u=await unit();const {data,error}=await supabase.from("billing_profiles").select("*").eq("business_unit_id",u.id).maybeSingle();if(error)throw error;return data||{};}
 export const saveCompanyProfile=profile=>invoke({action:"save_company_profile",profile});
+
+export const cancelInvoice=(invoiceId,reason)=>invoke({action:"cancel_invoice",invoiceId,reason});
+export const replaceInvoice=(invoiceId,input)=>invoke({action:"replace_invoice",invoiceId,...input});
+export const recordInvoiceRefund=(invoiceId,reason)=>invoke({action:"record_refund",invoiceId,reason});

@@ -5,13 +5,14 @@ import {transform} from 'esbuild';
 import * as contractRules from '../supabase/functions/_shared/contracts.js';
 import * as tariffRules from '../supabase/functions/_shared/tariffs.js';
 import * as businessRules from '../supabase/functions/_shared/businessProfile.js';
-const rules={...contractRules,...tariffRules,...businessRules};
+import * as correctionRules from '../supabase/functions/_shared/financeCorrections.js';
+const rules={...contractRules,...tariffRules,...businessRules,...correctionRules};
 const unit='unit',org='org',day='2026-10-07';
 const group={id:'group',business_unit_id:unit,active:true,contract_scope:'group',contract_group:'ersatzkassen',base_fee:2.4,price_per_km:2.1};
 function database(contracts=[]){
  const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts,customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,service_date:day,trip_type:'Dialyse',from_address:'A',to_address:'B'}],customers:[{id:'customer',first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',billable_km:15,insurer_amount:33.9,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
  const writes=[];
- const db={auth:{getUser:async()=>({data:{user:{id:'user'}}})},from(table){let filters=[],single=false,patch=null,insert=null;
+ const db={async rpc(name,args){writes.push({rpc:name,args});if(name==='issue_case_finance_invoice'){writes.push({table:'invoices',insert:{...args.p_header,issuer_snapshot:args.p_header.issuerSnapshot}});writes.push({table:'invoice_items',insert:args.p_items});writes.push({table:'trip_billing_cases',patch:{billing_status:'invoiced'}});}return {data:{ok:true,id:'new',invoiceNumber:'RE-TEST'},error:null};},auth:{getUser:async()=>({data:{user:{id:'user'}}})},from(table){let filters=[],single=false,patch=null,insert=null;
  const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},not(k,op,v){filters.push(r=>r[k]!==v);return q},order(){return q},limit(){return q},maybeSingle(){single=true;return q},single(){single=true;return q},update(v){patch=v;return q},upsert(v){insert=v;return q},insert(v){insert=v;return q},delete(){return q},then(resolve,reject){try{let data=(rows[table]||[]).filter(r=>filters.every(f=>f(r)));if(patch){writes.push({table,patch});data=data.map(r=>Object.assign(r,patch));}if(insert){writes.push({table,insert});data=[{id:'new',document_seq:1,...insert}];}return Promise.resolve({data:single?data[0]||null:data,error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject)}}};return q}};
  return {db,writes,rows};
 }
@@ -87,3 +88,7 @@ test('profile rejects invalid banking and IK fields while permitting incomplete 
  assert.equal(businessRules.normalizeProfile({iban:'DE89 3704 0044 0532 0130 00'}).iban,'DE89370400440532013000');
  assert.equal(businessRules.normalizeProfile({}).company_name,null);
 });
+
+test('cancellation requires reason and scopes actor from verified membership',async()=>{const setup=database();let r=await call('manage-finance',setup,{action:'cancel_invoice',invoiceId:'original',reason:'x'});assert.equal(r.status,400);assert.equal(setup.writes.length,0);r=await call('manage-finance',setup,{action:'cancel_invoice',invoiceId:'original',reason:'Falscher Betrag',actor:'foreign',unit:'foreign'});assert.equal(r.status,200);assert.equal(setup.writes[0].args.p_actor,'user');assert.equal(setup.writes[0].args.p_unit,'unit');});
+test('old status cancellation cannot bypass cancellation document',async()=>{const setup=database();const r=await call('manage-finance',setup,{action:'set_invoice_status',invoiceId:'original',status:'cancelled'});assert.equal(r.status,400);assert.equal(setup.writes.length,0);});
+test('correction rejects invalid money and dates',()=>{assert.throws(()=>correctionRules.correctionItems([{description:'Fahrt',quantity:1,unitGross:''}]),/ungültig/);assert.throws(()=>correctionRules.correctionItems([{description:'Fahrt',quantity:1,unitGross:-5}]),/ungültig/);assert.throws(()=>correctionRules.correctionHeader({serviceDate:'2026-02-30'}, {},{}),/Leistungsdatum/);assert.equal(correctionRules.correctionItems([{description:'Fahrt',quantity:2,unitGross:2.345}])[0].unitGross,2.35);});

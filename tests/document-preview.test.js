@@ -19,3 +19,7 @@ test('issuer snapshot renders contact, bank and identifiers safely on both docum
  assert.match(renderReceipt({issuer_snapshot}),/Saved &lt;Company&gt;/);
  assert.match(renderInvoice({id:'legacy'}),/TARIQ Krankenfahrdienst/);
 });
+test('cancellation and replacement preview show escaped original references and reverse deduction',()=>{
+ const html=renderInvoice({id:'s',document_type:'cancellation',invoice_number:'ST-1',reference_invoice_number:'RE-<1>',cancellation_reason:'Falsch <script>',status:'open',gross_total:-19,issuer_snapshot:{payment_note:'DO NOT PAY'}},[{invoice_id:'s',description:'Eigenanteil',quantity:1,unit_gross:5,gross_total:5,vat_rate:0}]);assert.match(html,/<h1>Stornobeleg/);assert.match(html,/Storno zu Rechnung RE-&lt;1&gt;/);assert.match(html,/Ausgestellt/);assert.match(html,/5,00/);assert.doesNotMatch(html,/<script|DO NOT PAY/);
+ assert.match(renderInvoice({id:'r',reference_invoice_number:'RE-1',replaces_invoice_id:'o'}),/Ersatz für Rechnung RE-1/);
+});

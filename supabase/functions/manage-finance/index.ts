@@ -1,3 +1,4 @@
+import {correctionReason,correctionItems,correctionHeader} from "../_shared/financeCorrections.js";
 import {normalizeProfile,loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,tripServiceType} from "../_shared/contracts.js";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -102,11 +103,29 @@ Deno.serve(async(req:Request)=>{
     return out(200,{ok:true,id:invoice.id,invoiceNumber,netTotal,vatTotal,grossTotal});
   }
 
+  if(body.action==="cancel_invoice"||body.action==="record_refund"){
+    let reason;try{reason=correctionReason(body.reason)}catch(e){return out(400,{error:e.message})}
+    const name=body.action==="cancel_invoice"?"cancel_finance_invoice":"record_invoice_refund";
+    const params:any={p_invoice:body.invoiceId,p_unit:unit.id,p_actor:u.user.id};
+    params[body.action==="cancel_invoice"?"p_reason":"p_note"]=reason;
+    const {data,error}=await db.rpc(name,params);
+    return error?out(409,{error:error.message}):out(200,data);
+  }
+  if(body.action==="replace_invoice"){
+    const {data:original}=await db.from("invoices").select("*").eq("id",body.invoiceId).eq("business_unit_id",unit.id).maybeSingle();
+    if(!original||original.document_type!=="invoice"||original.status!=="cancelled")return out(409,{error:"Zuerst die Originalrechnung stornieren."});
+    let header,items;
+    try{items=correctionItems(body.items);header=correctionHeader(body,original,await loadIssuerSnapshot(db,unit.id))}catch(e){return out(400,{error:e.message})}
+    if(original.payer_type==="insurer"&&body.businessUnitCode==="fahrdienst"){
+      if(!await resolveContract(db,unit.id,p.organization_id,original.insurer_id,header.serviceDate,undefined,body.serviceType==="wheelchair"?"wheelchair":"standard"))return out(409,{error:"Kein gültiger Vertrag am Leistungsdatum. Ersatzrechnung gesperrt."});
+    }
+    const {data,error}=await db.rpc("replace_finance_invoice",{p_original:original.id,p_unit:unit.id,p_actor:u.user.id,p_header:header,p_items:items});
+    return error?out(409,{error:error.message}):out(200,data);
+  }
   if(body.action==="set_invoice_status"){
-    if(!body.invoiceId||!["paid","cancelled"].includes(body.status))return out(400,{error:"Ungültiger Rechnungsstatus."});
-    const patch=body.status==="paid"?{status:"paid",paid_at:new Date().toISOString(),updated_at:new Date().toISOString()}:{status:"cancelled",cancelled_at:new Date().toISOString(),updated_at:new Date().toISOString()};
-    const {error}=await db.from("invoices").update(patch).eq("id",body.invoiceId).eq("business_unit_id",unit.id).eq("status","open");
-    return error?out(400,{error:error.message}):out(200,{ok:true});
+    if(!body.invoiceId||body.status!=="paid")return out(400,{error:"Storno benötigt einen eigenen Beleg und Stornogrund."});
+    const {data,error}=await db.from("invoices").update({status:"paid",paid_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",body.invoiceId).eq("business_unit_id",unit.id).eq("status","open").eq("document_type","invoice").select("id").maybeSingle();
+    return error||!data?out(409,{error:error?.message||"Nur eine offene Rechnung kann als bezahlt erfasst werden."}):out(200,{ok:true});
   }
 
   if(body.action==="create_receipt"){
