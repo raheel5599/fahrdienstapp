@@ -12,4 +12,6 @@ export function reminderBlock(invoice,reminders,day=reminderToday()){
  return '';
 }
 export function overdueDays(due,day=reminderToday()){if(!due||due>=day)return 0;return Math.round((Date.parse(day+'T12:00:00Z')-Date.parse(due+'T12:00:00Z'))/86400000)}
-export const reminderMessage='Zu der unten genannten Eigenanteilsrechnung konnten wir bisher keinen Zahlungseingang feststellen. Bitte überweisen Sie den offenen Betrag bis zur angegebenen Zahlungsfrist unter Angabe der Rechnungsnummer. Falls Sie bereits bezahlt haben, teilen Sie uns bitte Zahlungsdatum und Referenz mit, damit wir den Eingang zuordnen können.';
+export const reminderMessage='Zu der unten genannten Eigenanteilsrechnung konnten wir bisher keinen vollständigen Zahlungseingang feststellen. Bitte überweisen Sie den offenen Betrag bis zur angegebenen Zahlungsfrist unter Angabe der Rechnungsnummer. Falls Sie bereits bezahlt haben, teilen Sie uns bitte Zahlungsdatum und Referenz mit, damit wir den Eingang zuordnen können.';
+
+export const patientOpenAmount=(invoice,balances=[])=>Number(balances.find(b=>b.id===invoice.id)?.open_amount??invoice.gross_total);

@@ -29,6 +29,12 @@ Deno.serve(async(req:Request)=>{
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
 
+  if(["patient_payment_report","record_patient_payment","cancel_patient_payment"].includes(body.action)){
+    if(body.action!=="patient_payment_report"&&body.confirmed!==true)return out(400,{error:"Tatsächlichen Zahlungseingang oder Korrektur bestätigen."});
+    const params=body.action==="patient_payment_report"?{p_unit:unit.id,p_actor:u.user.id,p_invoice:body.invoiceId}:body.action==="record_patient_payment"?{p_unit:unit.id,p_actor:u.user.id,p_invoice:body.invoiceId,p_request:body.requestId,p_version:body.version,p_date:body.date,p_amount:body.amount,p_method:body.method,p_reference:body.reference,p_note:body.note||""}:{p_unit:unit.id,p_actor:u.user.id,p_payment:body.paymentId,p_reason:body.reason};
+    const {data,error}=await db.rpc(body.action,params);return error?out(409,{error:error.message}):out(200,data);
+  }
+
   if(["prepare_patient_reminder","update_patient_reminder","inspect_patient_reminder"].includes(body.action)){
     if(body.action!=="inspect_patient_reminder"&&body.confirmed!==true)return out(400,{error:"Geprüfte Vorbereitung oder tatsächlichen Versand/Korrektur bestätigen."});
     if(body.action==="update_patient_reminder"&&body.step==="sent"&&body.channel==="email"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.destination||"")))return out(400,{error:"Empfänger-E-Mail prüfen."});

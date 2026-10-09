@@ -149,3 +149,10 @@ test('reminder RPCs require verified office scope and explicit confirmation for 
  r=await call('manage-finance',setup,{action:'inspect_patient_reminder',id:'reminder'});assert.equal(r.status,200);assert.equal(calls[1].name,'inspect_patient_reminder');
  r=await call('manage-finance',setup,{action:'update_patient_reminder',id:'reminder',step:'sent',confirmed:true,date:'2026-10-09',channel:'post',destination:'Teststraße 1'});assert.equal(r.status,200);assert.equal(calls[2].params.p_actor,'user');assert.equal(calls[2].params.p_step,'sent');
 });
+
+test('patient payment RPCs verify actor and scope and require actual-payment confirmation',async()=>{
+ const s=database();assert.equal((await call('manage-finance',s,{action:'record_patient_payment',invoiceId:'invoice'})).status,400);assert.equal((await call('manage-finance',s,{action:'cancel_patient_payment',paymentId:'payment'})).status,400);
+ const calls=[];s.db.rpc=async(name,params)=>{calls.push({name,params});return{data:{ok:true}}};
+ let r=await call('manage-finance',s,{action:'record_patient_payment',confirmed:true,invoiceId:'invoice',requestId:'request',version:'v',date:'2026-10-09',amount:10,method:'bank',reference:'TEST',p_actor:'forged',p_unit:'other'});assert.equal(r.status,200);assert.equal(calls[0].params.p_actor,'user');assert.equal(calls[0].params.p_unit,unit);assert.equal(calls[0].params.p_amount,10);assert.equal(calls[0].params.p_version,'v');
+ r=await call('manage-finance',s,{action:'patient_payment_report',invoiceId:'invoice'});assert.equal(r.status,200);assert.equal(calls[1].name,'patient_payment_report');s.rows.memberships[0].role='driver';assert.equal((await call('manage-finance',s,{action:'patient_payment_report',invoiceId:'invoice'})).status,403);
+});
