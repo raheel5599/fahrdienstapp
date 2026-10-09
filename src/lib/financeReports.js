@@ -3,7 +3,7 @@ export const reportMonth=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/B
 export const reportMoney=cents=>(cents/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 function cents(value){const n=Number(value);if(value==null||!Number.isFinite(n))throw Error('Ein Rechnungsbetrag fehlt oder ist ungültig.');return Math.round(n*100)}
 export function invoiceCategory(i){return i.payer_type==='insurer'?'insurer':i.payer_type==='private'?(i.own_share_case_id||i.own_share_month?'own_share':'private'):'other'}
-export function invoicePayerKey(i){return `${i.payer_type}:${i.insurer_id||i.customer_id||i.payer_name||'unknown'}`}
+export function invoicePayerKey(i){const identity=i.payer_type==='insurer'?(i.insurer_id||i.payer_name):i.payer_type==='private'?(i.customer_id||i.payer_name):JSON.stringify([i.payer_name,i.payer_address]);return `${i.payer_type}:${identity||'unknown'}`}
 export function financeReport(data,{month,category='',payer=''}={}){
  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month||''))throw Error('Bitte einen gültigen Berichtsmonat wählen.');
  const invoices=data.invoices||[],reversed=new Set(invoices.filter(i=>i.document_type==='cancellation').map(i=>i.reversal_of_id));
