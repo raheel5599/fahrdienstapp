@@ -1,4 +1,5 @@
 import ShiftReports from './components/ShiftReports.jsx';
+import FinanceReports from './components/FinanceReports.jsx';
 import DocumentManagement from './components/DocumentManagement.jsx';
 import BusinessSettings from './components/BusinessSettings.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -73,6 +74,7 @@ function StatusPill({ status }) {
 function App() {
   const { session, loading, login, logout, can } = useAuthSession();
   const [financeTab, setFinanceTab] = useState('invoices');
+  const [reportTab,setReportTab]=useState('finance');
   const [billingInitialView,setBillingInitialView]=useState('cases');
   const [dispatchTab,setDispatchTab]=useState('live');
   const [active, setActive] = useState('dashboard');
@@ -227,7 +229,7 @@ function App() {
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'berichte' && can(PERMISSIONS.REPORTS_VIEW) ? (
-            <ShiftReports drivers={drivers}/>
+            <div><div className="module-tabs finance-tabs" aria-label="Berichtsart"><button className={reportTab==='finance'?'active':''} onClick={()=>setReportTab('finance')}>Rechnungen & Kostenträger</button><button className={reportTab==='shifts'?'active':''} onClick={()=>setReportTab('shifts')}>Schichten & Kilometer</button></div>{reportTab==='finance'?<FinanceReports data={financeData}/>:<ShiftReports drivers={drivers}/>}</div>
           ) : active === 'disposition' ? (
             <div><div className="module-tabs finance-tabs" aria-label="Fahrtenansicht"><button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button><button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button></div>{dispatchTab==='history'?<TripHistory clients={clientData.clients} onRecorded={()=>Promise.all([dispatchData.refresh(),billingData.refresh()])}/>:<LiveDispatchBoard data={dispatchData} drivers={drivers} vehicles={fleet.vehicles} onNew={()=>setDispatchOpen(true)} onEdit={id=>setDispatchOpen(id)}/>}</div>
           ) : active === 'dashboard' ? (

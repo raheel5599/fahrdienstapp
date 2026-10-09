@@ -340,3 +340,7 @@ html{overflow-wrap:break-word}button:focus-visible,input:focus-visible,select:fo
 
 .driver-shift-panel{padding:20px;margin-bottom:24px}.driver-shift-panel h2{margin:0 0 8px}.driver-shift-panel .form-grid{margin:16px 0}.shift-assigned{display:flex;flex-direction:column;gap:8px;min-width:0}.shift-assigned strong{display:flex;align-items:center;gap:10px;font-size:20px;overflow-wrap:anywhere}.shift-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.shift-metrics>span{display:flex;flex-direction:column;gap:6px;padding:12px;background:#f4f5f6;border-radius:10px;min-width:0;overflow-wrap:anywhere;font-size:13px}.shift-buttons{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}.driver-shift-panel details{margin-top:14px}.driver-shift-panel form>.primary-button{margin-top:6px}
 @media(max-width:720px){.driver-shift-panel{padding:14px}.driver-shift-panel .batch-heading{align-items:flex-start;flex-direction:column}.shift-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.shift-buttons>*{flex:1;min-height:46px}.driver-shift-panel .form-grid{grid-template-columns:1fr}.driver-shift-panel form>.primary-button{width:100%}}
+
+.finance-report .batch-card {min-width:0;overflow-wrap:anywhere;}
+.finance-report .batch-card h4 {margin:0;}
+.finance-report .batch-card > div {min-width:0;}
