@@ -33,7 +33,7 @@ begin
  reject=false;begin perform public.update_patient_reminder(u,actor,request,'void',null,null,null,'','Already sent');exception when others then reject=true;end;if not reject then raise exception 'Sent history erased';end if;
  reject=false;begin perform public.prepare_patient_reminder(u,actor,gen_random_uuid(),inv,expected,day+14,message);exception when others then reject=true;end;if not reject then raise exception 'Active payment deadline ignored';end if;
  update public.patient_payment_reminders set letter_date=day-20,deadline=day-1 where id=request;
- request=gen_random_uuid();r=public.prepare_patient_reminder(u,actor,request,inv,expected,day+14,message);
+ request=gen_random_uuid();r=public.prepare_patient_reminder(u,actor,request,inv,expected,day+14,message,2,(public.patient_reminder_config(u,actor)->>'version')::integer);
  if(r->>'reminder_number')::integer<>2 then raise exception 'Wrong follow-up number';end if;
  update public.invoices set status='cancelled' where id=inv;
  reject=false;begin perform public.update_patient_reminder(u,actor,request,'sent',day,'post','Teststraße 1','','');exception when others then reject=true;end;if not reject then raise exception 'Cancelled draft send accepted';end if;
@@ -42,7 +42,7 @@ begin
  if r->>'status'<>'void' then raise exception 'Void failed';end if;
  perform public.update_patient_reminder(u,actor,request,'void',null,null,null,'','Rechnung inzwischen storniert');
  update public.invoices set status='open' where id=inv;
- request=gen_random_uuid();r=public.prepare_patient_reminder(u,actor,request,inv,expected,day+14,message);
+ request=gen_random_uuid();r=public.prepare_patient_reminder(u,actor,request,inv,expected,day+14,message,2,(public.patient_reminder_config(u,actor)->>'version')::integer);
  update public.patient_payment_reminders set letter_date=day-20,deadline=day-1 where id=request;
  reject=false;begin perform public.inspect_patient_reminder(u,actor,request);exception when others then reject=true;end;if not reject then raise exception 'Expired draft preview accepted';end if;
  reject=false;begin perform public.update_patient_reminder(u,actor,request,'sent',day,'post','Teststraße 1','','');exception when others then reject=true;end;if not reject then raise exception 'Send after deadline accepted';end if;

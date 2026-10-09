@@ -35,10 +35,16 @@ Deno.serve(async(req:Request)=>{
     const {data,error}=await db.rpc(body.action,params);return error?out(409,{error:error.message}):out(200,data);
   }
 
+  if(["patient_reminder_config","save_patient_reminder_settings"].includes(body.action)){
+    if(body.action==="save_patient_reminder_settings"&&m.role!=="admin")return out(403,{error:"Nur Administratoren dürfen Mahnstufen ändern."});
+    const params=body.action==="patient_reminder_config"?{p_unit:unit.id,p_actor:u.user.id}:{p_unit:unit.id,p_actor:u.user.id,p_version:body.version,p_stages:body.stages};
+    const {data,error}=await db.rpc(body.action,params);return error?out(409,{error:error.message}):out(200,data);
+  }
+
   if(["prepare_patient_reminder","update_patient_reminder","inspect_patient_reminder"].includes(body.action)){
     if(body.action!=="inspect_patient_reminder"&&body.confirmed!==true)return out(400,{error:"Geprüfte Vorbereitung oder tatsächlichen Versand/Korrektur bestätigen."});
     if(body.action==="update_patient_reminder"&&body.step==="sent"&&body.channel==="email"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.destination||"")))return out(400,{error:"Empfänger-E-Mail prüfen."});
-    const params=body.action==="inspect_patient_reminder"?{p_unit:unit.id,p_actor:u.user.id,p_id:body.id}:body.action==="prepare_patient_reminder"?{p_unit:unit.id,p_actor:u.user.id,p_request:body.requestId,p_invoice:body.invoiceId,p_expected:body.expected,p_deadline:body.deadline,p_message:body.message}:{p_unit:unit.id,p_actor:u.user.id,p_id:body.id,p_step:body.step,p_date:body.date||null,p_channel:body.channel||null,p_destination:body.destination||null,p_reference:body.reference||"",p_reason:body.reason||""};
+    const params=body.action==="inspect_patient_reminder"?{p_unit:unit.id,p_actor:u.user.id,p_id:body.id}:body.action==="prepare_patient_reminder"?{p_unit:unit.id,p_actor:u.user.id,p_request:body.requestId,p_invoice:body.invoiceId,p_expected:body.expected,p_deadline:body.deadline,p_message:body.message,p_stage:body.stage??1,p_settings_version:body.settingsVersion??0}:{p_unit:unit.id,p_actor:u.user.id,p_id:body.id,p_step:body.step,p_date:body.date||null,p_channel:body.channel||null,p_destination:body.destination||null,p_reference:body.reference||"",p_reason:body.reason||""};
     const {data,error}=await db.rpc(body.action,params);
     return error?out(409,{error:error.message}):out(200,data);
   }
