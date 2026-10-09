@@ -335,3 +335,5 @@ html{overflow-wrap:break-word}button:focus-visible,input:focus-visible,select:fo
 
 .billing-document-panel .form-grid .checkbox-label{flex-direction:row;align-items:center;gap:10px;min-height:44px}.billing-document-panel .form-grid .checkbox-label input{width:22px;height:22px;flex:0 0 22px;padding:0}
 .payment-allocation-list{display:grid;gap:12px;margin:16px 0}.payment-allocation-list>label{display:grid;grid-template-columns:minmax(0,1fr) 130px;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px}.payment-allocation-list small{display:block;color:#747980;margin-top:5px}.payment-allocation-list input{width:100%;min-width:0;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px}.payment-reconciliation-modal{width:min(820px,100%)}@media(max-width:650px){.payment-allocation-list>label{grid-template-columns:minmax(0,1fr)}.payment-allocation-list input{font-size:16px}}
+
+.patient-reminder-actions{align-content:start;align-self:flex-start}
