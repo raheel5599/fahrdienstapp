@@ -1,3 +1,4 @@
+import DriverShiftPanel from './DriverShiftPanel.jsx';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Bell,BellOff,Car,CheckCircle2,LogOut,MapPin,MapPinned,Navigation,Route} from 'lucide-react';
 import {APP_CONFIG} from '../config/app.js';
@@ -48,7 +49,8 @@ async function notify(title,body,tag){
   }catch{return false;}
 }
 
-export default function DriverPortal({data,user,onLogout}){
+export default function DriverPortal({data,user,onLogout,shiftApi,statusApi=updateTripStatus}){
+  const [shiftState,setShiftState]=useState({shift:null,allowed:false,error:''});
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
@@ -118,9 +120,9 @@ export default function DriverPortal({data,user,onLogout}){
   },[permission,data.trips]);
 
   async function changeStatus(status){
-    if(!active)return;
+    if(!active||!shiftState.allowed)return;
     setBusy(true);setError('');
-    const result=await updateTripStatus(active.id,status);
+    const result=await statusApi(active.id,status);
     setBusy(false);
     if(!result.ok){setError(result.message||'Status konnte nicht geändert werden.');return;}
     await data.refresh();
@@ -129,15 +131,16 @@ export default function DriverPortal({data,user,onLogout}){
   return <div className="driver-app">
     <header className="driver-topbar">
       <img src={APP_CONFIG.logoUrl} alt={APP_CONFIG.name}/>
-      <div className="driver-online"><span className="online-dot"/> Online · {active?'im Einsatz':'verfügbar'}</div>
+      <div className="driver-online"><span className="online-dot"/> {shiftState.shift?shiftState.shift.state==='paused'?'Pause':active?'Schicht · im Einsatz':'Schicht · verfügbar':'Keine Schicht'}</div>
       <div className="driver-select">
         <div className="driver-identity"><strong>{user.name}</strong><span>Fahrer</span></div>
-        <button className="secondary-button" onClick={onLogout}><LogOut size={17}/> Abmelden</button>
+        <button className="secondary-button" onClick={onLogout}><LogOut size={17}/> Konto abmelden</button>
       </div>
     </header>
 
     <main className="driver-content">
-      <div className="driver-page-heading">
+      <DriverShiftPanel api={shiftApi} onState={setShiftState}/>
+      {shiftState.shift&&<><div className="driver-page-heading">
         <div><p className="eyebrow">FAHRER WEB APP</p><h1>Meine Aufträge</h1><p>Zugewiesene Fahrten erscheinen automatisch und werden live mit dem Büro synchronisiert.</p></div>
         <div className="driver-count">{visibleTrips.length}<span>offene Aufträge</span></div>
       </div>
@@ -177,11 +180,12 @@ export default function DriverPortal({data,user,onLogout}){
               {DRIVER_WORKFLOW.map((status,index)=><div key={status} className={index<=progressIndex?'done':''}><span/>{STATUS_LABELS[status]}</div>)}
             </div>
 
+            {active.vehicleId&&active.vehicleId!==shiftState.shift?.vehicle_id&&<p className="users-error">Fahrzeug der Fahrt stimmt nicht mit deiner Schicht überein. Bitte das Büro kontaktieren.</p>}
             <div className="driver-action-grid">
               {actions.map(([status,label,Icon])=>{
                 const targetIndex=DRIVER_WORKFLOW.indexOf(status);
-                const enabled=targetIndex===progressIndex+1;
-                return <button key={status} disabled={!enabled||busy} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
+                const enabled=targetIndex===progressIndex+1&&(!active.vehicleId||active.vehicleId===shiftState.shift?.vehicle_id);
+                return <button key={status} disabled={!enabled||busy||!shiftState.allowed} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
               })}
             </div>
 
@@ -206,6 +210,7 @@ export default function DriverPortal({data,user,onLogout}){
           </div>):<div className="users-loading">Keine weiteren Fahrten geplant.</div>}
         </div>
       </section>
+      </>}
     </main>
   </div>;
 }

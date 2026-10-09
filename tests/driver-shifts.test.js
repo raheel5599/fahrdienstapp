@@ -1,0 +1,7 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {shiftTotals,shiftDuration,shiftMileageError} from '../src/lib/driverShifts.js';
+test('shift totals preserve odometer distance and subtract only recorded breaks',()=>{const shift={started_at:'2026-10-09T06:00:00Z',ended_at:'2026-10-09T14:00:00Z',start_mileage:100,end_mileage:180};const r=shiftTotals(shift,[{started_at:'2026-10-09T09:00:00Z',ended_at:'2026-10-09T09:30:00Z'}]);assert.deepEqual(r,{elapsed:28800,paused:1800,working:27000,km:80});assert.equal(shiftDuration(r.working),'7 Std. 30 Min.')});
+test('open pause survives reload, clamps to shift and does not invent an end mileage',()=>{const r=shiftTotals({started_at:'2026-10-09T06:00:00Z',start_mileage:100},[{started_at:'2026-10-09T06:30:00Z',ended_at:null}],'2026-10-09T07:00:00Z');assert.deepEqual(r,{elapsed:3600,paused:1800,working:1800,km:null});assert.deepEqual(shiftTotals(null),{elapsed:0,paused:0,working:0,km:null})});
+test('Berlin DST shift durations use elapsed instants, not wall-clock subtraction',()=>{assert.equal(shiftTotals({started_at:'2026-10-25T00:00:00Z',ended_at:'2026-10-25T03:00:00Z',start_mileage:1,end_mileage:1}).elapsed,10800)});
+
+test('mileage validation provides inline errors for empty, fractional and backwards readings',()=>{for(const v of [null,'',-1,1.5,'100.5',2147483648])assert.ok(shiftMileageError(v));assert.match(shiftMileageError('999',1000),/mindestens/);assert.equal(shiftMileageError('1000',1000),'')});

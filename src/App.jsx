@@ -1,3 +1,4 @@
+import ShiftReports from './components/ShiftReports.jsx';
 import DocumentManagement from './components/DocumentManagement.jsx';
 import BusinessSettings from './components/BusinessSettings.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -222,9 +223,11 @@ function App() {
           ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (
             <ScheduleManagement data={scheduleData} clients={clientData.clients} />
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
-            <DriverManagement drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
+            <DriverManagement canEditDrivers={user.role===ROLES.ADMIN} drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
+          ) : active === 'berichte' && can(PERMISSIONS.REPORTS_VIEW) ? (
+            <ShiftReports drivers={drivers}/>
           ) : active === 'disposition' ? (
             <div><div className="module-tabs finance-tabs" aria-label="Fahrtenansicht"><button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button><button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button></div>{dispatchTab==='history'?<TripHistory clients={clientData.clients} onRecorded={()=>Promise.all([dispatchData.refresh(),billingData.refresh()])}/>:<LiveDispatchBoard data={dispatchData} drivers={drivers} vehicles={fleet.vehicles} onNew={()=>setDispatchOpen(true)} onEdit={id=>setDispatchOpen(id)}/>}</div>
           ) : active === 'dashboard' ? (

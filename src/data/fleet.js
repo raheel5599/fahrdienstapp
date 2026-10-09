@@ -107,7 +107,7 @@ async function invokeFleet(body) {
   const { data, error } = await supabase.functions.invoke('manage-fleet', {
     body: { ...body, businessUnitCode: APP_CONFIG.businessUnitCode }
   });
-  if (error) return { ok: false, message: error.message || 'Fuhrpark konnte nicht gespeichert werden.' };
+  if(error){let message=error.message;try{message=(await error.context.json()).error||message}catch{}return {ok:false,message:message||'Fuhrpark konnte nicht gespeichert werden.'};}
   if (data?.error) return { ok: false, message: data.error };
   return { ok: true, data };
 }

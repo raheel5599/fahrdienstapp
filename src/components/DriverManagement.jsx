@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { CircleUserRound, Plus, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { createDriver, updateDriver, assignVehicle, releaseVehicle } from '../data/fleet.js';
 
-export default function DriverManagement({ drivers, vehicles, loading, error, refresh }) {
+const vehicleApi={assign:assignVehicle,release:releaseVehicle};
+export default function DriverManagement({ drivers, vehicles, loading, error, refresh,canEditDrivers=true,assignmentApi=vehicleApi }) {
   const [editor, setEditor] = useState(null);
+  const [assignment,setAssignment]=useState(null),[assigning,setAssigning]=useState(false),[assignmentError,setAssignmentError]=useState('');
+  async function saveAssignment(e){e.preventDefault();setAssigning(true);setAssignmentError('');try{const vehicleId=new FormData(e.currentTarget).get('vehicleId');const r=vehicleId?await assignmentApi.assign(assignment.id,vehicleId):await assignmentApi.release(assignment.id);if(!r.ok)throw Error(r.message);setAssignment(null);setNotice('Fahrzeugzuordnung gespeichert.');await refresh()}catch(e){setAssignmentError(e.message)}finally{setAssigning(false)}}
   const [notice, setNotice] = useState('');
   const [saveError, setSaveError] = useState('');
 
@@ -22,10 +25,10 @@ export default function DriverManagement({ drivers, vehicles, loading, error, re
       const driverId = editor?.driver?.id || result.data?.id;
       if (driverId) {
         const assignment = await assignVehicle(driverId, payload.vehicleId);
-        if (!assignment.ok) setSaveError(assignment.message || 'Fahrzeug konnte nicht zugeordnet werden.');
+        if (!assignment.ok){setSaveError(assignment.message || 'Fahrzeug konnte nicht zugeordnet werden.');return;}
       }
     } else if (editor?.driver?.id && editor.driver.vehicleId) {
-      await releaseVehicle(editor.driver.id);
+      const release=await releaseVehicle(editor.driver.id);if(!release.ok){setSaveError(release.message);return;}
     }
 
     setEditor(null);
@@ -43,7 +46,7 @@ export default function DriverManagement({ drivers, vehicles, loading, error, re
         </div>
         <div className="fleet-toolbar-actions">
           <button className="secondary-button" onClick={refresh}><RefreshCw size={17}/> Aktualisieren</button>
-          <button className="primary-button" onClick={() => setEditor({ driver: null })}><Plus size={17}/> Fahrer anlegen</button>
+          {canEditDrivers&&<button className="primary-button" onClick={() => setEditor({ driver: null })}><Plus size={17}/> Fahrer anlegen</button>}
         </div>
       </div>
 
@@ -73,7 +76,7 @@ export default function DriverManagement({ drivers, vehicles, loading, error, re
                   <td>{driver.vehicle ? <><strong>{driver.vehicle}</strong><br/><small>{driver.vehicleLabel || 'Zugeordnet'}</small></> : 'Nicht zugeordnet'}</td>
                   <td><span className={`account-status ${driver.active ? 'active' : 'blocked'}`}><span/>{driver.active ? driver.status : 'Inaktiv'}</span></td>
                   <td>{driver.licenseExpiry ? <>bis {new Date(driver.licenseExpiry).toLocaleDateString('de-DE')}</> : '—'}</td>
-                  <td><button className="text-button" onClick={() => setEditor({ driver })}>Bearbeiten</button></td>
+                  <td><button className="text-button" onClick={()=>{setAssignmentError('');setAssignment(driver)}}>Fahrzeug zuteilen</button>{canEditDrivers&&<button className="text-button" onClick={() => setEditor({ driver })}>Bearbeiten</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -81,6 +84,7 @@ export default function DriverManagement({ drivers, vehicles, loading, error, re
         </div>
       </section>
 
+      {assignment&&<div className="modal-layer"><button className="modal-backdrop" disabled={assigning} aria-label="Schließen" onClick={()=>setAssignment(null)}/><form role="dialog" aria-modal="true" aria-label="Fahrzeug zuteilen" className="modal-card billing-check-modal" onSubmit={saveAssignment}><h2>Fahrzeug zuteilen</h2><p>{assignment.name} · Änderung nur außerhalb einer offenen Schicht.</p><label><span>Fahrzeugkennzeichen</span><select name="vehicleId" aria-label="Fahrzeugkennzeichen" defaultValue={assignment.vehicleId||''} disabled={assigning}><option value="">Keine feste Zuordnung</option>{vehicles.filter(v=>v.active&&(!v.driverId||v.driverId===assignment.id)).map(v=><option key={v.id} value={v.id}>{v.registration} · {[v.make,v.model].filter(Boolean).join(' ')}</option>)}</select></label>{assignmentError&&<p role="alert" className="users-error">{assignmentError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={assigning} onClick={()=>setAssignment(null)}>Abbrechen</button><button className="primary-button" disabled={assigning}>Zuordnung speichern</button></div></form></div>}
       {editor && <DriverEditor driver={editor.driver} vehicles={vehicles} onClose={() => setEditor(null)} onSave={save} />}
     </section>
   );
