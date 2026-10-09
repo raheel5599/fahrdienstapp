@@ -139,3 +139,13 @@ test('insurer payment register requires actual confirmation and scopes authentic
  r=await call('manage-finance',s,{action:'record_insurer_payment',submissionId:'run',confirmed:true,requestId:'id',date:'2026-10-08',amount:60,reference:'BANK',entries:[]});assert.equal(r.status,200);assert.equal(s.writes[0].rpc,'record_insurer_payment');assert.equal(s.writes[0].args.p_actor,'user');assert.equal(s.writes[0].args.p_unit,'unit');
  s.rows.memberships[0].role='driver';assert.equal((await call('manage-finance',s,{action:'insurer_payment_report',submissionId:'run'})).status,403);
 });
+
+test('reminder RPCs require verified office scope and explicit confirmation for writes',async()=>{
+ const setup=database();setup.rows.memberships[0].role='driver';let r=await call('manage-finance',setup,{action:'prepare_patient_reminder',confirmed:true});assert.equal(r.status,403);
+ setup.rows.memberships[0].role='office';r=await call('manage-finance',setup,{action:'prepare_patient_reminder'});assert.equal(r.status,400);
+ r=await call('manage-finance',setup,{action:'update_patient_reminder',step:'sent'});assert.equal(r.status,400);
+ const calls=[];setup.db.rpc=async(name,params)=>{calls.push({name,params});return{data:{id:'reminder'}}};
+ r=await call('manage-finance',setup,{action:'prepare_patient_reminder',confirmed:true,requestId:'request',invoiceId:'invoice',expected:{id:'invoice'},deadline:'2026-10-23',message:'Bitte bezahlen.',p_actor:'forged',p_unit:'other'});assert.equal(r.status,200);assert.equal(calls[0].params.p_actor,'user');assert.equal(calls[0].params.p_unit,unit);
+ r=await call('manage-finance',setup,{action:'inspect_patient_reminder',id:'reminder'});assert.equal(r.status,200);assert.equal(calls[1].name,'inspect_patient_reminder');
+ r=await call('manage-finance',setup,{action:'update_patient_reminder',id:'reminder',step:'sent',confirmed:true,date:'2026-10-09',channel:'post',destination:'Teststraße 1'});assert.equal(r.status,200);assert.equal(calls[2].params.p_actor,'user');assert.equal(calls[2].params.p_step,'sent');
+});
