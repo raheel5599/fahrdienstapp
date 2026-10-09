@@ -53,6 +53,13 @@ begin
  r=public.staff_shift_report(u,staff,date_trunc('month',day)::date,driver,0);
  if (r->'totals'->>'closed_count')::integer<>2 or (r->'totals'->>'km')::integer<>30 or jsonb_array_length(r->'rows')<>2 then raise exception 'Report totals incorrect';end if;
  reject=false;begin perform public.staff_shift_report(u,actor,date_trunc('month',day)::date,null,0);exception when others then reject=true;end;if not reject then raise exception 'Driver read staff report';end if;
+ perform public.set_office_shift_vehicle(u,staff,driver,v);
+ update public.drivers set active=false where id=driver;
+ perform public.set_office_shift_vehicle(u,staff,driver,v);
+ reject=false;begin perform public.set_office_shift_vehicle(u,staff,driver,v2);exception when others then reject=true;end;if not reject then raise exception 'Inactive driver received new vehicle';end if;
+ perform public.set_office_shift_vehicle(u,staff,driver,null);
+ if exists(select 1 from public.driver_vehicle_assignments where driver_id=driver and released_at is null) then raise exception 'Inactive vehicle release failed';end if;
+ update public.drivers set active=true where id=driver;
  r=public.change_driver_shift(u,other,gen_random_uuid(),'start',null,v,121,null);version=(r->'shift'->>'updated_at')::timestamptz;
  perform public.change_driver_shift(u,other,gen_random_uuid(),'end',(r->'shift'->>'id')::uuid,null,131,version);
  perform set_config('request.jwt.claim.sub',actor::text,true);perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
