@@ -10,7 +10,7 @@ import {
   Activity, BadgeEuro, Bell, BookOpenCheck, Building2, CalendarDays, Car,
   ChartNoAxesCombined, CheckCircle2, ChevronDown, CircleUserRound, Clock3,
   FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
-  Menu, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
+  Menu, MoreHorizontal, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
   ShieldCheck, Stethoscope, UserRoundCheck, UsersRound, WalletCards, X, LogOut
 } from 'lucide-react';
 import { APP_CONFIG, ROLES } from './config/app.js';
@@ -85,6 +85,12 @@ function App() {
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [trips, setTrips] = usePersistentState('trips', initialTrips);
   const [demoDrivers, setDemoDrivers] = usePersistentState('drivers', driversSeed);
+  useEffect(()=>{
+    if(!mobileNav)return;
+    const close=event=>{if(event.key==='Escape')setMobileNav(false)};
+    window.addEventListener('keydown',close);
+    return()=>window.removeEventListener('keydown',close);
+  },[mobileNav]);
   const isStaffSession = Boolean(session && session.user.role !== ROLES.DRIVER);
   const fleet = useFleetData(isStaffSession);
   const clientData = useClientData(isStaffSession);
@@ -119,6 +125,9 @@ function App() {
 
   const user = session.user;
   const visibleNav = nav.filter(([id]) => can(NAV_PERMISSION[id]));
+  const mobileTabs=[['dashboard','Start',Home],['disposition','Fahrten',Route],['kunden','Kunden',UsersRound],['termine','Termine',CalendarDays]].filter(([id])=>can(NAV_PERMISSION[id]));
+  const navigate=id=>{setActive(id);setMobileNav(false);window.scrollTo({top:0,behavior:'instant'})};
+  const todayLabel=new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
 
   const updateTripStatus = (tripId, status) => {
     const trip = trips.find(t => t.id === tripId);
@@ -168,9 +177,9 @@ function App() {
           <img src={LOGO} alt="TARIQ Krankenfahrdienst" />
           <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Menü schließen"><X /></button>
         </div>
-        <nav>
+        <nav aria-label="Hauptmenü">
           {visibleNav.map(([id, label, Icon]) => (
-            <button key={id} className={active === id ? 'active' : ''} onClick={() => { setActive(id); setMobileNav(false); }}>
+            <button key={id} className={active === id ? 'active' : ''} aria-current={active===id?'page':undefined} onClick={() => navigate(id)}>
               <Icon size={19}/><span>{label}</span>
             </button>
           ))}
@@ -186,8 +195,8 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-button menu-button" aria-label="Menü öffnen" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu /></button>
-            <div className="topbar-brand">TARIQ · Verwaltung</div>
+            <button className="icon-button menu-button" aria-label="Menü öffnen" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu /><span className="mobile-menu-label">Menü</span></button>
+            <div className="topbar-brand"><span className="desktop-brand">TARIQ · Verwaltung</span><span className="mobile-brand">TARIQ Fahrdienst</span></div>
           </div>
           <div className="topbar-actions">
 
@@ -199,12 +208,13 @@ function App() {
           </div>
         </header>
 
-        <section className="page">
+        <section className={`page page-${active}`}>
           <div className="page-heading">
             <div>
               <p className="eyebrow">TARIQ KRANKENFAHRDIENST</p>
-              <h1>{active === 'dashboard' ? 'Übersicht & Live-Disposition' : nav.find(n => n[0] === active)?.[1]}</h1>
-              <p>Alle wichtigen Abläufe zentral steuern, dokumentieren und abrechnen.</p>
+              <h1>{active === 'dashboard' ? <><span className="desktop-page-title">Übersicht & Live-Disposition</span><span className="mobile-page-title">Hallo {user.name?.split(' ')[0]||'und willkommen'}</span></> : nav.find(n => n[0] === active)?.[1]}</h1>
+              <p className="desktop-page-description">Alle wichtigen Abläufe zentral steuern, dokumentieren und abrechnen.</p>
+              {active==='dashboard'&&<p className="mobile-page-date">{todayLabel}</p>}
             </div>
             <div className="heading-actions">
               {can(PERMISSIONS.TRIPS_MANAGE) && <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>}
@@ -252,6 +262,11 @@ function App() {
           )}
         </section>
       </main>
+
+      <nav className="mobile-app-nav" aria-label="Schnellnavigation">
+        {mobileTabs.map(([id,label,Icon])=><button key={id} aria-current={active===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={23}/><span>{label}</span></button>)}
+        <button aria-label="Weitere Bereiche" aria-expanded={mobileNav} aria-current={!mobileTabs.some(([id])=>id===active)?'page':undefined} onClick={()=>setMobileNav(true)}><MoreHorizontal size={23}/><span>Mehr</span></button>
+      </nav>
 
       {dispatchOpen && can(PERMISSIONS.TRIPS_MANAGE) && (
         <LiveDispatchModal

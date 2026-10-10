@@ -1,4 +1,4 @@
-const CACHE='tariq-driver-shell-20261010-v2';
+const CACHE='tariq-driver-shell-20261010-v3';
 const INSTALL_ASSETS=['/manifest.webmanifest','/icons/app-icon.svg','/icons/apple-touch-icon.png','/icons/app-192.png','/icons/app-512.png'];
 const assetPaths=html=>[...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+\.(?:js|css))"/g)].map(m=>m[1]);
 async function saveShell(response){if(!response.ok||!response.headers.get('content-type')?.includes('text/html'))return;const html=await response.clone().text(),assets=assetPaths(html);if(!assets.length)return;const cache=await caches.open(CACHE);await cache.addAll([...assets,...INSTALL_ASSETS].map(p=>new Request(p,{cache:'reload'})));await cache.put('/index.html',response.clone())}

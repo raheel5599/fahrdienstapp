@@ -89,6 +89,23 @@ try{
  await page.goto(`${origin}/tests/ui/fixture.html?screen=shiftreports`);await page.getByRole('heading',{name:'Schichten & Kilometer',exact:true}).waitFor();await page.getByText('80 km',{exact:true}).first().waitFor();await page.getByLabel('Fahrer filtern',{exact:true}).selectOption('test-driver');await page.getByText('7 Std. 30 Min.',{exact:true}).first().waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);await page.screenshot({path:`test-results/${name}-${size}-shift-report.png`});
  await page.addInitScript(()=>localStorage.setItem('tariq-auth-session-v1',JSON.stringify({mode:'local-directory',user:{id:'ui-test',name:'Testbüro',role:'admin'},expiresAt:Date.now()+60000})));
  await page.goto(`${origin}/tests/ui/fixture.html?screen=shell`);await page.locator('.app-shell').waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: app shell width`);
+ const mobileTabs=page.getByRole('navigation',{name:'Schnellnavigation',exact:true});
+ if(width<=800){
+  await mobileTabs.getByRole('button',{name:'Start',exact:true}).waitFor();
+  assert.equal(await mobileTabs.isVisible(),true);await page.screenshot({path:`test-results/${name}-${size}-mobile-app-start.png`});
+  for(const[label,title]of [['Fahrten','Fahrten / Disposition'],['Kunden','Kundenverwaltung'],['Termine','Terminverwaltung']]){
+   await mobileTabs.getByRole('button',{name:label,exact:true}).click();
+   assert.equal(await page.locator('.page-heading h1').innerText(),title);
+   assert.equal(await mobileTabs.getByRole('button',{name:label,exact:true}).getAttribute('aria-current'),'page');
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: mobile ${label} width`);
+  }
+  await mobileTabs.getByRole('button',{name:'Start',exact:true}).click();await page.getByRole('heading',{name:'Hallo Testbüro',exact:true}).waitFor();
+  await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).click();await page.getByRole('navigation',{name:'Hauptmenü'}).getByRole('button',{name:'Nachrichten',exact:true}).click();
+  assert.equal(await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).getAttribute('aria-current'),'page');
+  await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).click();await page.keyboard.press('Escape');
+  assert.equal(await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).getAttribute('aria-expanded'),'false');
+  const tabBox=await mobileTabs.boundingBox();assert(tabBox.y>=height-120&&tabBox.y+tabBox.height<=height+1,`${name}/${size}: tab bar anchored to bottom`);
+ }else assert.equal(await mobileTabs.isVisible(),false,`${name}/${size}: desktop retains sidebar`);
  if(width<=1180){await page.getByRole('button',{name:'Menü öffnen'}).click();await page.getByRole('button',{name:'Rechnungen',exact:true}).click();}else await page.getByRole('button',{name:'Rechnungen',exact:true}).click();
  await page.getByRole('button',{name:'Quittungen',exact:true}).click();await page.getByRole('heading',{name:'Quittungen',exact:true}).waitFor();
  if(width<=1180){await page.getByRole('button',{name:'Menü öffnen'}).click();await page.getByRole('button',{name:'Berichte & Statistiken',exact:true}).click();}else await page.getByRole('button',{name:'Berichte & Statistiken',exact:true}).click();await page.getByRole('button',{name:'Fahrer & Fahrzeuge',exact:true}).click();await page.getByRole('heading',{name:'Fahrer- & Fahrzeugauslastung',exact:true}).waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: report navigation width`);
