@@ -367,3 +367,7 @@ html{overflow-wrap:break-word}button:focus-visible,input:focus-visible,select:fo
 .messages-panel form {margin-top:20px;}
 .messages-panel .shift-buttons {align-items:center;}
 .driver-content>.messages-panel {margin:20px 0;}
+.driver-offline{padding:20px;margin:20px 0;overflow-wrap:anywhere}
+.driver-offline p{color:#697386;line-height:1.5}
+.driver-offline button{margin:6px 8px 6px 0;max-width:100%;white-space:normal}
+.driver-offline label{display:flex;gap:10px;align-items:flex-start;margin:16px 0}

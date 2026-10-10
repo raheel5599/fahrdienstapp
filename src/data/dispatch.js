@@ -12,7 +12,7 @@ async function getUnit(){
   return data;
 }
 
-function mapTrip(t){
+export function mapTrip(t){
   return {
     id:t.id,
     customerId:t.customer_id,
@@ -71,7 +71,7 @@ async function invoke(body){
   const {data,error}=await supabase.functions.invoke('manage-dispatch',{
     body:{...body,businessUnitCode:APP_CONFIG.businessUnitCode}
   });
-  if(error){let message=error.message;try{message=(await error.context.json()).error||message}catch{}return {ok:false,message:message||'Disposition konnte nicht gespeichert werden.'};}
+  if(error){let message=error.message;try{message=(await error.context.json()).error||message}catch{}return {ok:false,httpStatus:error.context?.status||0,message:message||'Disposition konnte nicht gespeichert werden.'};}
   if(data?.error) return {ok:false,message:data.error};
   return {ok:true,data};
 }
@@ -79,4 +79,5 @@ async function invoke(body){
 export const createTrip=input=>invoke({action:'create_trip',...input});
 export const assignTrip=(tripId,driverId,vehicleId)=>invoke({action:'assign_trip',tripId,driverId,vehicleId});
 export const updateTripStatus=(tripId,status)=>invoke({action:'update_status',tripId,status});
+export const syncDriverStatus=input=>invoke({action:'update_status',...input});
 export const cancelTrip=tripId=>invoke({action:'cancel_trip',tripId});

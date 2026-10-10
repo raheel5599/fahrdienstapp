@@ -89,7 +89,7 @@ function App() {
   const fleet = useFleetData(isStaffSession);
   const clientData = useClientData(isStaffSession);
   const scheduleData = useScheduleData(isStaffSession);
-  const dispatchData = useDispatchData(Boolean(session));
+  const dispatchData = useDispatchData(Boolean(session),session?.user?.id);
   const contractData = useContractData(isStaffSession);
   const financeData = useFinanceData(isStaffSession);
   const billingData = useBillingData(isStaffSession);

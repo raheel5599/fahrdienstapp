@@ -1,3 +1,5 @@
+import DriverOfflinePanel from './DriverOfflinePanel.jsx';
+import {useDriverOffline} from '../hooks/useDriverOffline.js';
 import Messages from './Messages.jsx';
 import DriverShiftPanel from './DriverShiftPanel.jsx';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
@@ -50,17 +52,21 @@ async function notify(title,body,tag){
   }catch{return false;}
 }
 
-export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,statusApi=updateTripStatus}){
+export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,offlineSend,statusApi=updateTripStatus}){
   const [shiftState,setShiftState]=useState({shift:null,allowed:false,error:''});
   const [messagesOpen,setMessagesOpen]=useState(false);
+  const offline=useDriverOffline(user,data,shiftApi,offlineSend);
+  const shownData=offline.enabled?{...data,trips:offline.trips,loading:data.loading&&offline.online}:data;
+  const offlineBlocked=offline.enabled&&((!offline.online&&!offline.valid)||offline.queue.some(e=>e.state==='blocked'));
+
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
   const timerRef=useRef(null);
 
   const visibleTrips=useMemo(
-    ()=>data.trips.filter(t=>!['abgeschlossen','storniert','no_show'].includes(t.status)),
-    [data.trips]
+    ()=>shownData.trips.filter(t=>!['abgeschlossen','storniert','no_show'].includes(t.status)),
+    [shownData.trips]
   );
   const active=useMemo(
     ()=>visibleTrips.find(t=>[TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status))
@@ -124,10 +130,10 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,st
   async function changeStatus(status){
     if(!active||!shiftState.allowed)return;
     setBusy(true);setError('');
-    const result=await statusApi(active.id,status);
+    const result=offline.enabled?await offline.status(active,status,shiftState.shift):await statusApi(active.id,status);
     setBusy(false);
     if(!result.ok){setError(result.message||'Status konnte nicht geändert werden.');return;}
-    await data.refresh();
+    if(!offline.enabled)await data.refresh();
   }
 
   return <div className="driver-app">
@@ -136,12 +142,13 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,st
       <div className="driver-online"><span className="online-dot"/> {shiftState.shift?shiftState.shift.state==='paused'?'Pause':active?'Schicht · im Einsatz':'Schicht · verfügbar':'Keine Schicht'}</div>
       <div className="driver-select">
         <div className="driver-identity"><strong>{user.name}</strong><span>Fahrer</span></div>
-        <button className="secondary-button" onClick={onLogout}><LogOut size={17}/> Konto abmelden</button>
+        <button className="secondary-button" onClick={()=>{if(offline.queue.length){setError('Noch nicht übertragene Fahrtmeldungen vorhanden. Zuerst übertragen oder mit dem Büro klären.');return}onLogout()}}><LogOut size={17}/> Konto abmelden</button>
       </div>
     </header>
 
     <main className="driver-content">
-      <DriverShiftPanel api={shiftApi} onState={setShiftState}/>
+      <DriverShiftPanel api={offline.api} onState={setShiftState} changeBlocked={offline.enabled&&(!offline.online||offline.queue.length>0)}/>
+      {offline.enabled&&<DriverOfflinePanel offline={offline} blocked={offlineBlocked}/>}
       <button className="secondary-button" aria-expanded={messagesOpen} onClick={()=>setMessagesOpen(v=>!v)}>{messagesOpen?'Nachrichten schließen':'Nachrichten mit dem Büro'}</button>
       {messagesOpen&&<Messages api={messagesApi}/>}
       {shiftState.shift&&<><div className="driver-page-heading">
@@ -158,13 +165,13 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,st
       {active&&active.status===TRIP_STATUS.PLANNED&&dueIn!==null&&dueIn<=15&&dueIn>=0&&<div className="driver-reminder"><strong>Fahrt beginnt bald</strong><span>Geplanter Start in {dueIn} Minuten. Bitte rechtzeitig auf „Auf dem Weg“ stellen.</span></div>}
       {active&&active.status===TRIP_STATUS.PLANNED&&dueIn!==null&&dueIn<0&&<div className="driver-reminder overdue"><strong>Status prüfen</strong><span>Die geplante Startzeit ist seit {Math.abs(dueIn)} Minuten überschritten.</span></div>}
 
-      {data.loading?<section className="empty-driver-state"><Car/><h2>Aufträge werden geladen …</h2></section>:active?(
+      {shownData.loading?<section className="empty-driver-state"><Car/><h2>Aufträge werden geladen …</h2></section>:active?(
         <section className="driver-current">
           <div className="current-badge">AKTUELLE FAHRT · {dateLabel(active.date)} · {active.time}</div>
           <div className="driver-trip-card">
             <div className="driver-trip-head">
               <div><h2>{active.patient||'Kunde'}</h2><p>{active.type} · {active.direction==='return'?'Rückfahrt':'Hinfahrt'}</p></div>
-              <StatusPill status={active.status}/>
+              <StatusPill status={active.status}/>{active.offlinePending&&<span>Auf diesem Gerät gespeichert · Übertragung offen</span>}
             </div>
 
             {active.wheelchair&&<div className="driver-care-note"><strong>Rollstuhlfahrt</strong><span>Bitte Fahrzeug und Einstieg entsprechend vorbereiten.</span></div>}
@@ -189,7 +196,7 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,st
               {actions.map(([status,label,Icon])=>{
                 const targetIndex=DRIVER_WORKFLOW.indexOf(status);
                 const enabled=targetIndex===progressIndex+1&&(!active.vehicleId||active.vehicleId===shiftState.shift?.vehicle_id);
-                return <button key={status} disabled={!enabled||busy||!shiftState.allowed} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
+                return <button key={status} disabled={!enabled||busy||!shiftState.allowed||offlineBlocked||offline.syncing} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
               })}
             </div>
 

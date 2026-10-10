@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
     "test:ui": "node scripts/test-responsive.mjs",
-    "test:reports": "node scripts/test-finance-reports.mjs"
+    "test:reports": "node scripts/test-finance-reports.mjs",
+    "test:offline": "node scripts/test-driver-offline.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

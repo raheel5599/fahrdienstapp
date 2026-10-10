@@ -1,3 +1,4 @@
+import {rememberOfflineDriver,restoreOfflineDriver,forgetOfflineIdentity,driverOfflineStore} from '../../src/lib/driverOfflineStore.js';
 import Messages from '../../src/components/Messages.jsx';
 import UtilizationReports from '../../src/components/UtilizationReports.jsx';
 import AccountingManagement from '../../src/components/AccountingManagement.jsx';
@@ -59,6 +60,8 @@ const documentClients=[{id:'doc-customer',fullName:'Erika Beispiel',authorizatio
 let fixtureDocuments=[{id:'original',customer_id:'doc-customer',kind:'prescription',title:'Testverordnung',file_name:'Testverordnung.png',mime_type:'image/png',size_bytes:68,status:'ready',uploaded_at:'2026-10-08T09:00:00Z'}];
 const documentApi={list:async({customerId,kind,status})=>{const documents=fixtureDocuments.filter(d=>(!customerId||d.customer_id===customerId)&&(!kind||d.kind===kind)&&d.status===status);return {documents,total:documents.length}},upload:async(file,input)=>{validateDocumentInput({...input,fileName:file.name,mimeType:file.type,size:file.size});fixtureDocuments.push({id:crypto.randomUUID(),customer_id:input.customerId,kind:input.kind,title:input.title,file_name:file.name,mime_type:file.type,size_bytes:file.size,authorization_id:input.authorizationId,trip_id:input.tripId,status:'ready',uploaded_at:new Date().toISOString()})},archive:async id=>{fixtureDocuments.find(d=>d.id===id).status='archived'},restore:async id=>{fixtureDocuments.find(d=>d.id===id).status='ready'},link:async(id,input)=>{Object.assign(fixtureDocuments.find(d=>d.id===id),{title:input.title,authorization_id:input.authorizationId,trip_id:input.tripId})}};
 const documentPreview=async id=>{const doc=fixtureDocuments.find(d=>d.id===id);return {url:location.origin+'/tests/ui/fixture-document.'+(doc.mime_type==='application/pdf'?'pdf':'png'),mimeType:doc.mime_type,fileName:doc.file_name}};
+window.fixtureLoadedAt=crypto.randomUUID();
+window.offlineIdentityApi={rememberOfflineDriver,restoreOfflineDriver,forgetOfflineIdentity,driverOfflineStore};
 const screen=new URLSearchParams(location.search).get('screen');
 const noop=()=>{};
 
@@ -134,9 +137,9 @@ function OwnPaymentsFixture(){
 }
 
 function DriverShiftFixture(){
- const assigned=new URLSearchParams(location.search).get('assigned')==='1',storageKey='shift-fixture-'+assigned;
+ const offlineMode=new URLSearchParams(location.search).get('offline')==='1',assigned=new URLSearchParams(location.search).get('assigned')==='1',storageKey='shift-fixture-'+assigned;
  const state=React.useRef(JSON.parse(sessionStorage.getItem(storageKey)||'null')||{shift:null,breaks:[],lastShift:null,assignedVehicleId:assigned?'v1':null,vehicles:[{id:'v1',registration:'FB-TEST 5599',make:'VW',model:'Touran',mileage:1000}]});
- const [trips,setTrips]=React.useState([{id:'driver-test-trip',date:'2026-10-09',time:'18:00',type:'Privatfahrt',patient:'Testpatient',from:'Teststraße 1',to:'Testziel',status:'geplant',vehicleId:'v1',vehicle:'FB-TEST 5599'}]);
+ const [trips,setTrips]=React.useState(JSON.parse(sessionStorage.getItem('offline-server-trips')||'null')||[{id:'driver-test-trip',driverId:'test-d',updatedAt:'fixture-v1',date:offlineMode?new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date()):'2026-10-09',time:'18:00',type:'Privatfahrt',patient:'Testpatient',from:'Teststraße 1',to:'Testziel',status:'geplant',vehicleId:'v1',vehicle:'FB-TEST 5599'}]);
  const api=React.useMemo(()=>({load:async()=>({ok:true,data:structuredClone(state.current)}),change:async input=>{
   if(window.shiftFail){window.shiftFail=false;return{ok:false,message:'Schicht geändert. Neu laden.'}}
   const s=state.current,stamp=new Date().toISOString();
@@ -146,7 +149,10 @@ function DriverShiftFixture(){
   if(input.action==='end'){s.shift.ended_at=stamp;s.shift.end_mileage=Number(input.mileage);s.shift.state='ended';s.lastShift=structuredClone(s.shift);s.shift=null;s.breaks.forEach(b=>{if(!b.ended_at)b.ended_at=stamp});s.vehicles[0].mileage=Number(input.mileage)}
   sessionStorage.setItem(storageKey,JSON.stringify(s));document.body.dataset.shiftAction=input.action;return{ok:true,data:structuredClone(s)}
  }}),[]);
- return <DriverPortal data={{trips,refresh:async()=>{},loading:false}} user={{name:'Testfahrer',role:'driver'}} onLogout={()=>document.body.dataset.accountLogout='yes'} shiftApi={api} messagesApi={driverMessagesFixture} statusApi={async(id,status)=>{document.body.dataset.driverStatus=status;setTrips(t=>t.map(x=>x.id===id?{...x,status}:x));return{ok:true}}}/>;
+ const tripsRef=React.useRef(trips);tripsRef.current=trips;
+ const offlineSend=React.useCallback(async e=>{const attempts=JSON.parse(sessionStorage.getItem('offline-attempts')||'[]');attempts.push(e);sessionStorage.setItem('offline-attempts',JSON.stringify(attempts));if(window.offlineConflict)return {ok:false,httpStatus:409,message:'Test: Fahrt vom Büro storniert.'};if(window.offlineTransportFail){window.offlineTransportFail=false;return{ok:false,httpStatus:503,message:'Test: Bestätigung verloren.'}}const next=tripsRef.current.map(t=>t.id===e.tripId?{...t,status:e.status,updatedAt:e.requestId}:t);sessionStorage.setItem('offline-server-trips',JSON.stringify(next));tripsRef.current=next;setTrips(next);return{ok:true,trip:next.find(t=>t.id===e.tripId)}},[]);
+ const refresh=React.useCallback(async()=>{setTrips([...tripsRef.current])},[]);
+ return <DriverPortal data={{trips,refresh,loading:false}} user={{name:'Testfahrer',role:'driver',...(offlineMode?{id:'offline-user',driverId:'test-d',businessUnitId:'offline-unit'}:{})}} offlineSend={offlineSend} onLogout={()=>document.body.dataset.accountLogout='yes'} shiftApi={api} messagesApi={driverMessagesFixture} statusApi={async(id,status)=>{document.body.dataset.driverStatus=status;setTrips(t=>t.map(x=>x.id===id?{...x,status}:x));return{ok:true}}}/>;
 }
 async function shiftReportFixture(input){const rows=[{id:'shift-1',driver_id:'test-driver',driver_name:'Testfahrer',vehicle_registration:'FB-TEST 5599',started_at:input.month+'T06:00:00Z',ended_at:input.month+'T14:00:00Z',start_mileage:1000,end_mileage:1080,state:'ended',elapsed_seconds:28800,pause_seconds:1800,working_seconds:27000},{id:'shift-2',driver_name:'Testfahrer',vehicle_registration:'FB-TEST 5599',started_at:input.month+'T06:00:00Z',ended_at:null,start_mileage:1080,end_mileage:null,state:'paused',elapsed_seconds:3600,pause_seconds:600,working_seconds:3000}];return{ok:true,data:{rows,totals:{count:2,closed_count:1,open_count:1,km:80,working_seconds:27000,pause_seconds:1800}}}}
 

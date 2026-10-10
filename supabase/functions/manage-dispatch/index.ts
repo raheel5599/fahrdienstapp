@@ -216,17 +216,24 @@ Deno.serve(async(req:Request)=>{
       return reply(403,{error:"Keine Berechtigung."});
     }
 
+    let updated:any;
+    if(membership.role==='driver' && body.requestId){
+      const {data:result,error}=await db.rpc('sync_driver_trip_status',{p_unit:unit.id,p_actor:user.id,p_request:body.requestId,p_trip:tripId,p_shift:body.shiftId,p_expected:body.expectedStatus,p_status:nextStatus,p_version:body.baseVersion||null,p_predecessor:body.predecessorId||null,p_event:body.recordedAt});
+      if(error)return reply(409,{error:error.message});
+      updated=result.trip;
+    }else{
     if(["auf_dem_weg","angekommen","in_fahrt"].includes(nextStatus)&&trip.driver_id){
       const {data:busy}=await db.from("trips").select("id").eq("business_unit_id",unit.id).eq("driver_id",trip.driver_id).in("status",["auf_dem_weg","angekommen","in_fahrt"]).neq("id",trip.id).limit(1);
       if(busy?.length)return reply(409,{error:"Der Fahrer hat bereits eine aktive Fahrt."});
     }
 
-    const {data:updated,error}=await db.from("trips").update({
+    const {data:changed,error}=await db.from("trips").update({
       status:nextStatus,updated_by:user.id,updated_at:new Date().toISOString()
     }).eq("id",trip.id).select("*").single();
 
-    if(error||!updated)return reply(400,{error:error?.message||"Status konnte nicht geändert werden."});
+    if(error||!changed)return reply(400,{error:error?.message||"Status konnte nicht geändert werden."});
 
+    updated=changed;
     if(updated.driver_id){
       const driverStatus=["auf_dem_weg","angekommen","in_fahrt"].includes(nextStatus)?nextStatus:"frei";
       await db.from("drivers").update({status:driverStatus,updated_at:new Date().toISOString()}).eq("id",updated.driver_id);
@@ -237,6 +244,8 @@ Deno.serve(async(req:Request)=>{
     }
     if(!["auf_dem_weg","angekommen","in_fahrt"].includes(nextStatus)){
       await db.from("driver_live_locations").delete().eq("trip_id",updated.id);
+    }
+
     }
 
     if(nextStatus==="abgeschlossen" && unitCode==="fahrdienst"){
@@ -252,7 +261,7 @@ Deno.serve(async(req:Request)=>{
         if(privateTrip){
           let fare:any=null;if(updated.private_price!=null){try{fare=privateFare({amount:updated.private_price,vatRate:updated.private_vat_rate})}catch{}}
           const {error:caseError}=await db.from("trip_billing_cases").upsert({business_unit_id:unit.id,trip_id:updated.id,customer_id:updated.customer_id,payer_type:"private",private_amount:fare?.gross||null,private_vat_rate:updated.private_vat_rate||0,gross_amount:fare?.gross||0,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",billing_status:fare?"ready":"review",review_message:fare?"":"Privatpreis vor Rechnungserstellung prüfen.",direction_count:1,calculated_at:new Date().toISOString()},{onConflict:"trip_id",ignoreDuplicates:true});
-          if(caseError)return reply(409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
+          if(caseError)return reply(body.requestId?503:409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
           return reply(200,{ok:true,trip:updated});
         }
         let insurer:any=null, contract:any=null, defaultKm:any=null;
@@ -303,7 +312,7 @@ Deno.serve(async(req:Request)=>{
           gross_amount:gross,own_share_amount:actualOwnShare,insurer_amount:insurerAmount,
           own_share_required:actualOwnShare>0,review_message:review.join(" "),calculated_at:new Date().toISOString()
         },{onConflict:"trip_id",ignoreDuplicates:true});
-        if(caseError)return reply(409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
+        if(caseError)return reply(body.requestId?503:409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
       }
     }
 

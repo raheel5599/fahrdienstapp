@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import {rememberOfflineDriver,restoreOfflineDriver,forgetOfflineIdentity} from '../lib/driverOfflineStore.js';
+import React, { useEffect, useState, useRef } from 'react';
 import { APP_CONFIG, ROLES } from '../config/app.js';
 import { BACKEND_CONFIG, isRemoteBackendConfigured } from '../config/backend.js';
 import { hasPermission } from './permissions.js';
@@ -51,7 +52,8 @@ async function loadRemoteAppUser(authUser) {
     .eq('id', authUser.id)
     .maybeSingle();
 
-  if (profileError || !profile?.active) return null;
+  if(profileError)throw profileError;
+  if (!profile?.active) return null;
 
   const { data: memberships, error: membershipError } = await supabase
     .from('memberships')
@@ -60,16 +62,18 @@ async function loadRemoteAppUser(authUser) {
     .eq('active', true)
     .eq('business_units.code', APP_CONFIG.businessUnitCode);
 
-  if (membershipError || !memberships?.length) return null;
+  if(membershipError)throw membershipError;
+  if (!memberships?.length) return null;
   const membership = memberships[0];
 
   let driverName = null;
   if (membership.role === ROLES.DRIVER && membership.driver_id) {
-    const { data: driver } = await supabase
+    const { data: driver, error:driverError } = await supabase
       .from('drivers')
       .select('id, full_name, active')
       .eq('id', membership.driver_id)
       .maybeSingle();
+    if(driverError)throw driverError;
     if (!driver?.active) return null;
     driverName = driver.full_name;
   }
@@ -99,6 +103,7 @@ export function useAuthSession() {
   const [session, setSession] = useState(() => DEMO_AUTH_ENABLED ? readLocalSession() : null);
   const [loading, setLoading] = useState(!DEMO_AUTH_ENABLED && isRemoteBackendConfigured);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const authEpoch=useRef(0);
 
   useEffect(() => {
     if (DEMO_AUTH_ENABLED || !isRemoteBackendConfigured || !supabase) {
@@ -110,19 +115,27 @@ export function useAuthSession() {
 
     const hydrate = async (authSession) => {
       if (!mounted) return;
+      const epoch=++authEpoch.current;
       if (!authSession?.user) {
+        await forgetOfflineIdentity().catch(()=>{});
+        if(!mounted||epoch!==authEpoch.current)return;
         setSession(null);
         setLoading(false);
         return;
       }
 
-      const appUser = await loadRemoteAppUser(authSession.user);
-      if (!mounted) return;
+      if(!navigator.onLine){const cached=await restoreOfflineDriver().catch(()=>null);if(mounted&&epoch===authEpoch.current){setSession(cached&&cached.user.id===authSession.user.id?{user:cached.user,mode:'offline-driver',issuedAt:cached.verifiedAt,expiresAt:cached.verifiedAt+12*60*60*1000}:null);setLoading(false)}return}
+      let appUser;
+      try{appUser=await loadRemoteAppUser(authSession.user)}catch{const cached=await restoreOfflineDriver().catch(()=>null);if(mounted&&epoch===authEpoch.current){setSession(cached&&cached.user.id===authSession.user.id?{user:cached.user,mode:'offline-driver',issuedAt:cached.verifiedAt}:null);setLoading(false)}return}
+      if (!mounted||epoch!==authEpoch.current) return;
 
       if (!appUser) {
+        await forgetOfflineIdentity().catch(()=>{});
         await supabase.auth.signOut();
         setSession(null);
       } else {
+        if(appUser.role===ROLES.DRIVER)await rememberOfflineDriver(appUser).catch(()=>{});else await forgetOfflineIdentity().catch(()=>{});
+        if(!mounted||epoch!==authEpoch.current)return;
         setSession({
           user: appUser,
           mode: 'supabase',
@@ -133,20 +146,26 @@ export function useAuthSession() {
       setLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data }) => hydrate(data.session));
+    const reconnect=()=>supabase.auth.getSession().then(({data})=>hydrate(data.session));
+    if(!navigator.onLine)restoreOfflineDriver().then(cached=>{if(mounted){setSession(cached?{user:cached.user,mode:'offline-driver',issuedAt:cached.verifiedAt,expiresAt:cached.verifiedAt+12*60*60*1000}:null);setLoading(false)}}).catch(()=>{if(mounted)setLoading(false)});else reconnect();
+    window.addEventListener('online',reconnect);
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, authSession) => {
+      if(event==='SIGNED_OUT'){++authEpoch.current;forgetOfflineIdentity().catch(()=>{});setSession(null);setLoading(false);return}
+      if(!navigator.onLine)return;
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       window.setTimeout(() => hydrate(authSession), 0);
     });
 
     return () => {
       mounted = false;
+      window.removeEventListener('online',reconnect);
       listener?.subscription?.unsubscribe();
     };
   }, []);
 
   const login = async (email, password) => {
+    ++authEpoch.current;
     if (DEMO_AUTH_ENABLED) {
       await ensureUserDirectory();
       const result = await authenticateDirectoryUser(email, password);
@@ -175,7 +194,8 @@ export function useAuthSession() {
       return { ok: false, message: 'E-Mail oder Passwort ist nicht korrekt.' };
     }
 
-    const appUser = await loadRemoteAppUser(data.user);
+    let appUser;try{appUser=await loadRemoteAppUser(data.user)}catch{setLoading(false);return {ok:false,message:'Zugang konnte nicht geprüft werden. Verbindung prüfen.'}}
+    if(appUser?.role===ROLES.DRIVER)await rememberOfflineDriver(appUser).catch(()=>{});else await forgetOfflineIdentity().catch(()=>{});
     if (!appUser) {
       await supabase.auth.signOut();
       setLoading(false);
@@ -215,11 +235,13 @@ export function useAuthSession() {
   };
 
   const logout = async () => {
+    ++authEpoch.current;
     if (DEMO_AUTH_ENABLED) {
       saveLocalSession(null);
       setSession(null);
       return;
     }
+    await forgetOfflineIdentity().catch(()=>{});
     if (supabase) await supabase.auth.signOut();
     setSession(null);
   };

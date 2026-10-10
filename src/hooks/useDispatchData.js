@@ -3,27 +3,33 @@ import {BACKEND_CONFIG,isRemoteBackendConfigured} from '../config/backend.js';
 import {loadDispatchTrips} from '../data/dispatch.js';
 import {supabase} from '../lib/supabase.js';
 
-export function useDispatchData(enabled=true){
+export function useDispatchData(enabled=true,accountKey=null){
   const remote=isRemoteBackendConfigured&&BACKEND_CONFIG.mode==='supabase';
   const [trips,setTrips]=useState([]);
   const [unit,setUnit]=useState(null);
   const [loading,setLoading]=useState(Boolean(enabled&&remote));
   const [error,setError]=useState('');
-  const refreshTimer=useRef(null);
+  const refreshTimer=useRef(null),requestSeq=useRef(0);
+  const [loadedFor,setLoadedFor]=useState(null);
 
   const refresh=useCallback(async()=>{
-    if(!enabled||!remote)return;
+    const request=++requestSeq.current;
+    if(!enabled||!remote){setTrips([]);setUnit(null);setLoading(false);return;}
+    if(!navigator.onLine){setLoading(false);return;}
     setLoading(true);setError('');
     try{
       const data=await loadDispatchTrips();
+      if(request!==requestSeq.current)return;
+      setLoadedFor(accountKey);
       setTrips(data.trips);
       setUnit(data.unit);
     }catch(err){
+      if(request!==requestSeq.current)return;
       setError(err?.message||'Live-Disposition konnte nicht geladen werden.');
     }finally{
-      setLoading(false);
+      if(request===requestSeq.current)setLoading(false);
     }
-  },[enabled,remote]);
+  },[enabled,remote,accountKey]);
 
   const queueRefresh=useCallback(()=>{
     if(refreshTimer.current)window.clearTimeout(refreshTimer.current);
@@ -34,6 +40,7 @@ export function useDispatchData(enabled=true){
     refresh();
     const interval=window.setInterval(refresh,30000);
     return()=>{
+      ++requestSeq.current;
       window.clearInterval(interval);
       if(refreshTimer.current)window.clearTimeout(refreshTimer.current);
     };
@@ -50,5 +57,5 @@ export function useDispatchData(enabled=true){
     return()=>{supabase.removeChannel(channel);};
   },[enabled,remote,unit?.id,queueRefresh]);
 
-  return {remote,unit,trips,loading,error,refresh};
+  return {remote,unit:accountKey===loadedFor?unit:null,trips:accountKey===loadedFor?trips:[],loading,error,refresh};
 }
