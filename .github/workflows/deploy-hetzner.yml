@@ -1,7 +1,7 @@
-name: Hetzner deploy
+name: Manual Hetzner deploy
+# Production releases use the pinned, tested workflow in Fahrdienst_website.
+# Keep this optional direct path manual: this repository has no SSH credential.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 concurrency:
   group: tariq-fahrdienst-app-production
