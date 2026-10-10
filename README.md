@@ -12,6 +12,7 @@ Interne Web-App für Büro, Disposition und Fahrer unter `app.tariq-fahrdienst.d
 - Kassenabrechnung ohne gültigen Vertrag gesperrt, auch bei manueller Rechnungserstellung
 - Positionsvorlagen: `5130XX` mit `52` ergibt `513052`, mit `05` ergibt `513005`
 - Rechnungen, Zuzahlungsquittungen und Druckansichten
+- Interne Textgespräche zwischen Büro und jeweils einem Fahrer mit ungelesenen Nachrichten und ausdrücklicher Lesebestätigung
 - PWA und Docker-/Nginx-Frontend, gemeinsamer Caddy-HTTPS-Eingang auf Hetzner
 
 Die Kassen und tatsächlichen Vertragspreise müssen vom Büro eingetragen werden. Die Ersatzkassen-Zuordnung ist die konfigurierte Geschäftsregel dieses Systems; der konkrete Vertrag muss die betreffende Kasse abdecken. Für weitere Fahrtarten ist der Code aus dem jeweiligen Vertrag einzugeben.
@@ -35,3 +36,13 @@ Die produktiven Edge Functions liegen unter `supabase/functions/`; gemeinsame Ve
 `.github/workflows/deploy-hetzner.yml` benötigt eines der vorhandenen SSH-Key-Secrets: `HETZNER_SSH_KEY`, `HETZNER_SSH_PRIVATE_KEY` oder `HETZNER_SSH_KEY_B64`. `HETZNER_HOST` kann gesetzt werden; sonst wird der bestehende Hetzner-Host verwendet. Schlüssel werden nicht ausgegeben.
 
 `scripts/deploy-hetzner.sh` baut den App-Container, prüft ihn intern, ergänzt bei Bedarf ausschließlich den fehlenden eigenen Domainblock in der tatsächlich gemounteten Caddyfile und validiert die Konfiguration vor dem Reload. Abschließend wird die öffentliche Domain geprüft. Andere Apps werden nicht neu gebaut oder ausgerollt.
+
+## Interne Nachrichten
+
+Büro und Verwaltung öffnen „Nachrichten“; Fahrer öffnen „Nachrichten mit dem Büro“ im Fahrerportal, auch vor der Schichtanmeldung und während einer Pause. Kontakte erfordern einen aktiven Fahrer mit aktivem App-Zugang im selben Geschäftsbereich. Fahrer können ausschließlich ihr eigenes Gespräch lesen und beantworten. Das Büro kann vorhandene Gespräche nach einer Zugangssperre weiterhin lesen; neue Nachrichten an diesen Fahrer sind gesperrt.
+
+Eine Lesebestätigung gilt bis zur angezeigten Nachrichtennummer einschließlich älterer Nachrichten. Der Büro-Posteingang und seine Lesebestätigung werden von den Büromitarbeitern gemeinsam verwendet. Öffnen und Aktualisieren bestätigen keine Nachrichten. Sendeanfragen mit unveränderter Anfragekennung und unverändertem Inhalt sind idempotent; Korrekturen erfolgen als neue Nachricht. Text ist auf 5000 Zeichen begrenzt.
+
+Die geöffnete Ansicht fragt alle 30 Sekunden neu ab. Es gibt keine Hintergrund-Push-, E-Mail- oder SMS-Benachrichtigungen, Dateianhänge oder Offline-Sendewarteschlange. Entwürfe bleiben während der geöffneten Nachrichtenansicht im Arbeitsspeicher; Schließen oder Neuladen verwirft sie.
+
+Server: `manage-messages` mit JWT und aus dem angemeldeten Konto abgeleiteter Identität, rollenprüfende SQL-Funktionen und RLS. Browser dürfen nur geschützte Daten lesen, keine Nachrichten direkt ändern. `tests/sql/messages.sql` prüft mit synthetischen Konten innerhalb einer zurückgerollten Transaktion Isolation, Wiederholungen, Lesestände und Seitenwechsel. `npm run test:reports` prüft die Nachrichtenoberfläche inklusive Fahrerportal auf fünf Bildschirmgrößen; `UI_WEBKIT=1` ergänzt WebKit.

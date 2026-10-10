@@ -1,3 +1,4 @@
+import Messages from './components/Messages.jsx';
 import UtilizationReports from './components/UtilizationReports.jsx';
 import AccountingManagement from './components/AccountingManagement.jsx';
 import ShiftReports from './components/ShiftReports.jsx';
@@ -232,6 +233,8 @@ function App() {
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'buchhaltung' && can(PERMISSIONS.ACCOUNTING_MANAGE) ? (
             <AccountingManagement/>
+          ) : active === 'nachrichten' && can(PERMISSIONS.MESSAGES_USE) ? (
+            <Messages/>
           ) : active === 'berichte' && can(PERMISSIONS.REPORTS_VIEW) ? (
             <div><div className="module-tabs finance-tabs" aria-label="Berichtsart"><button className={reportTab==='finance'?'active':''} onClick={()=>setReportTab('finance')}>Rechnungen & Kostenträger</button><button className={reportTab==='shifts'?'active':''} onClick={()=>setReportTab('shifts')}>Schichten & Kilometer</button><button className={reportTab==='utilization'?'active':''} onClick={()=>setReportTab('utilization')}>Fahrer & Fahrzeuge</button></div>{reportTab==='finance'?<FinanceReports data={financeData}/>:reportTab==='shifts'?<ShiftReports drivers={drivers}/>:<UtilizationReports/>}</div>
           ) : active === 'disposition' ? (

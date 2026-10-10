@@ -1,3 +1,4 @@
+import Messages from './Messages.jsx';
 import DriverShiftPanel from './DriverShiftPanel.jsx';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Bell,BellOff,Car,CheckCircle2,LogOut,MapPin,MapPinned,Navigation,Route} from 'lucide-react';
@@ -49,8 +50,9 @@ async function notify(title,body,tag){
   }catch{return false;}
 }
 
-export default function DriverPortal({data,user,onLogout,shiftApi,statusApi=updateTripStatus}){
+export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,statusApi=updateTripStatus}){
   const [shiftState,setShiftState]=useState({shift:null,allowed:false,error:''});
+  const [messagesOpen,setMessagesOpen]=useState(false);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
@@ -140,6 +142,8 @@ export default function DriverPortal({data,user,onLogout,shiftApi,statusApi=upda
 
     <main className="driver-content">
       <DriverShiftPanel api={shiftApi} onState={setShiftState}/>
+      <button className="secondary-button" aria-expanded={messagesOpen} onClick={()=>setMessagesOpen(v=>!v)}>{messagesOpen?'Nachrichten schließen':'Nachrichten mit dem Büro'}</button>
+      {messagesOpen&&<Messages api={messagesApi}/>}
       {shiftState.shift&&<><div className="driver-page-heading">
         <div><p className="eyebrow">FAHRER WEB APP</p><h1>Meine Aufträge</h1><p>Zugewiesene Fahrten erscheinen automatisch und werden live mit dem Büro synchronisiert.</p></div>
         <div className="driver-count">{visibleTrips.length}<span>offene Aufträge</span></div>
