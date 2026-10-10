@@ -91,6 +91,7 @@ try{
  await page.goto(`${origin}/tests/ui/fixture.html?screen=shell`);await page.locator('.app-shell').waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: app shell width`);
  if(width<=1180){await page.getByRole('button',{name:'Menü öffnen'}).click();await page.getByRole('button',{name:'Rechnungen',exact:true}).click();}else await page.getByRole('button',{name:'Rechnungen',exact:true}).click();
  await page.getByRole('button',{name:'Quittungen',exact:true}).click();await page.getByRole('heading',{name:'Quittungen',exact:true}).waitFor();
+ if(width<=1180){await page.getByRole('button',{name:'Menü öffnen'}).click();await page.getByRole('button',{name:'Berichte & Statistiken',exact:true}).click();}else await page.getByRole('button',{name:'Berichte & Statistiken',exact:true}).click();await page.getByRole('button',{name:'Fahrer & Fahrzeuge',exact:true}).click();await page.getByRole('heading',{name:'Fahrer- & Fahrzeugauslastung',exact:true}).waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: report navigation width`);
  await page.close();console.log(`PASS ${name} ${size}: customer scroll, invoice/receipt preview, print, billing, private invoices, copay confirmation, dispatch, original uploads/links/archive`);
  }}finally{await browser.close();}
  }
