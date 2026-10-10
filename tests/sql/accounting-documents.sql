@@ -1,0 +1,35 @@
+begin;
+do $$
+declare u uuid;org uuid;actor uuid=gen_random_uuid();outsider uuid=gen_random_uuid();entry uuid=gen_random_uuid();doc uuid=gen_random_uuid();pending uuid=gen_random_uuid();reject boolean;path text;
+begin
+ select id,organization_id into u,org from public.business_units where code='fahrdienst' and active limit 1;
+ insert into auth.users(id,email) values(actor,'expense-doc-'||actor||'@example.invalid'),(outsider,'expense-doc-'||outsider||'@example.invalid');
+ insert into public.app_profiles(id,organization_id,email,full_name,active) values(actor,org,'expense-doc-'||actor||'@example.invalid','Expense document test',true),(outsider,org,'expense-doc-'||outsider||'@example.invalid','Outsider',true);
+ insert into public.memberships(user_id,business_unit_id,role,active) values(actor,u,'office',true);
+ perform public.record_accounting_entry(u,actor,entry,'expense',null,null,(now() at time zone 'Europe/Berlin')::date,12.50,'card','fuel','Test','Test','DOCUMENT-ROLLBACK');
+ path=u||'/'||doc||'.pdf';
+ insert into public.accounting_documents(id,business_unit_id,entry_id,title,file_name,mime_type,size_bytes,storage_path,created_by) values(doc,u,entry,'Test','test.pdf','application/pdf',12,path,actor),(pending,u,entry,'Pending','pending.pdf','application/pdf',12,u||'/'||pending||'.pdf',actor);
+ perform set_config('request.jwt.claim.sub',outsider::text,true);execute 'set local role authenticated';
+ if (select count(*) from public.accounting_documents where id=doc)<>0 then raise exception 'Outsider can read';end if;
+ reject=false;begin insert into storage.objects(bucket_id,name) values('fahrdienst-expense-documents',path);exception when insufficient_privilege then reject=true;end;if not reject then raise exception 'Outsider can upload';end if;execute 'reset role';
+ perform set_config('request.jwt.claim.sub',actor::text,true);execute 'set local role authenticated';
+ if (select count(*) from public.accounting_documents where id=doc)<>1 then raise exception 'Office cannot read';end if;
+ reject=false;begin update public.accounting_documents set status='ready' where id=doc;exception when insufficient_privilege then reject=true;end;if not reject then raise exception 'Browser can modify metadata';end if;
+ insert into storage.objects(bucket_id,name) values('fahrdienst-expense-documents',path);
+ if (select count(*) from storage.objects where bucket_id='fahrdienst-expense-documents' and name=path)<>0 then raise exception 'Direct storage read';end if;
+ begin delete from storage.objects where bucket_id='fahrdienst-expense-documents' and name=path;exception when insufficient_privilege then null;end;execute 'reset role';
+ if (select count(*) from storage.objects where bucket_id='fahrdienst-expense-documents' and name=path)<>1 then raise exception 'Browser deleted original';end if;
+ update public.accounting_documents set status='ready',sha256=repeat('a',64),uploaded_at=now() where id=doc;
+ reject=false;begin update public.accounting_documents set storage_path='changed' where id=doc;exception when others then reject=true;end;if not reject then raise exception 'Mutable original path';end if;
+ reject=false;begin update public.accounting_documents set sha256=repeat('b',64) where id=doc;exception when others then reject=true;end;if not reject then raise exception 'Mutable original hash';end if;
+ reject=false;begin update public.accounting_documents set status='failed' where id=doc;exception when others then reject=true;end;if not reject then raise exception 'Ready original destroyed';end if;
+ reject=false;begin insert into public.accounting_documents(id,business_unit_id,entry_id,title,file_name,mime_type,size_bytes,storage_path,created_by,status,sha256,uploaded_at) values(gen_random_uuid(),u,entry,'Duplicate','dup.pdf','application/pdf',12,'duplicate-path',actor,'ready',repeat('a',64),now());exception when unique_violation then reject=true;end;if not reject then raise exception 'Duplicate original allowed';end if;
+ perform public.cancel_accounting_entry(u,actor,entry,'Test correction');
+ reject=false;begin update public.accounting_documents set status='ready',sha256=repeat('c',64),uploaded_at=now() where id=pending;exception when others then reject=true;end;if not reject then raise exception 'Cancelled expense finalized';end if;
+ reject=false;begin insert into public.accounting_documents(id,business_unit_id,entry_id,title,file_name,mime_type,size_bytes,storage_path,created_by) values(gen_random_uuid(),u,entry,'New','new.pdf','application/pdf',12,'new-path',actor);exception when others then reject=true;end;if not reject then raise exception 'Cancelled expense prepared';end if;
+ update public.accounting_documents set status='archived',archived_at=now(),archived_by=actor where id=doc;
+ update public.accounting_documents set status='ready',archived_at=null,archived_by=null where id=doc;
+ if (select sha256 from public.accounting_documents where id=doc)<>repeat('a',64) then raise exception 'Original after restoration changed';end if;
+ if (select public from storage.buckets where id='fahrdienst-expense-documents') then raise exception 'Public bucket';end if;
+end;$$;
+rollback;
