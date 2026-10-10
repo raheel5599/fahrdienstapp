@@ -1,10 +1,15 @@
 {
   "name": "TARIQ Krankenfahrdienst",
   "short_name": "TARIQ Fahrdienst",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0b0c0e",
   "theme_color": "#0b0c0e",
   "lang": "de-DE",
-  "icons": []
+  "icons": [
+    {"src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
 }
