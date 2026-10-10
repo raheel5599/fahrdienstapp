@@ -22,6 +22,11 @@ Deno.serve(async(req:Request)=>{
  if(body.action==='report'){const {data,error}=await db.rpc('driver_shift_report',{p_unit:unit.id,p_actor:u.user.id});return error?reply(409,{error:error.message}):reply(200,data)}
  if(!['start','pause','resume','end'].includes(body.action))return reply(400,{error:'Ungültige Schichtaktion.'});
  if(['start','end'].includes(body.action)&&(!/^\d+$/.test(String(body.mileage??''))||!Number.isSafeInteger(Number(body.mileage))))return reply(400,{error:'Kilometerstand als ganze Zahl eingeben.'});
+ if(body.businessUnitCode==='taxi'&&['pause','end'].includes(body.action)){
+  const {data:rides,error:rideError}=await db.from('taxi_live_rides').select('id').eq('business_unit_id',unit.id).eq('driver_id',m.driver_id).in('status',['assigned','to_pickup','arrived','occupied']).limit(1);
+  if(rideError)return reply(503,{error:'Aktive Taxifahrten konnten nicht geprüft werden.'});
+  if(rides?.length)return reply(409,{error:'Aktive Taxifahrt zuerst beenden.'});
+ }
  const {data,error}=await db.rpc('change_driver_shift',{p_unit:unit.id,p_actor:u.user.id,p_request:body.requestId,p_action:body.action,p_shift:body.shiftId||null,p_vehicle:body.vehicleId||null,p_mileage:['start','end'].includes(body.action)?Number(body.mileage):null,p_version:body.version||null});
  return error?reply(409,{error:error.message}):reply(200,data);
 });

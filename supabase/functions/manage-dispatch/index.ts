@@ -217,6 +217,11 @@ Deno.serve(async(req:Request)=>{
     }
 
     let updated:any;
+    if(unitCode==='taxi'&&['auf_dem_weg','angekommen','in_fahrt'].includes(nextStatus)&&trip.driver_id){
+      const {data:rides,error:rideError}=await db.from('taxi_live_rides').select('id').eq('business_unit_id',unit.id).eq('driver_id',trip.driver_id).in('status',['assigned','to_pickup','arrived','occupied']).limit(1);
+      if(rideError)return reply(503,{error:'Aktive Taxifahrt konnte nicht geprüft werden.'});
+      if(rides?.length)return reply(409,{error:'Einsteigerfahrt zuerst beenden.'});
+    }
     if(membership.role==='driver' && body.requestId){
       const {data:result,error}=await db.rpc('sync_driver_trip_status',{p_unit:unit.id,p_actor:user.id,p_request:body.requestId,p_trip:tripId,p_shift:body.shiftId,p_expected:body.expectedStatus,p_status:nextStatus,p_version:body.baseVersion||null,p_predecessor:body.predecessorId||null,p_event:body.recordedAt});
       if(error)return reply(409,{error:error.message});
@@ -248,7 +253,7 @@ Deno.serve(async(req:Request)=>{
 
     }
 
-    if(nextStatus==="abgeschlossen" && unitCode==="fahrdienst"){
+    if(nextStatus==="abgeschlossen" && ["fahrdienst","taxi"].includes(unitCode)){
       const {data:existingCase}=await db.from("trip_billing_cases").select("id").eq("trip_id",updated.id).maybeSingle();
       if(!existingCase){
         const {data:insurance}=await db.from("customer_insurances")

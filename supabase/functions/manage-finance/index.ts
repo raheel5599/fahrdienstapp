@@ -111,7 +111,7 @@ Deno.serve(async(req:Request)=>{
       const {data}=await db.from("health_insurers").select("id,name,billing_contact,billing_email").eq("id",body.insurerId).eq("organization_id",p.organization_id).maybeSingle();
       insurer=data;
     }
-    if(body.businessUnitCode==="fahrdienst"&&body.payerType==="insurer"){
+    if(["fahrdienst","taxi"].includes(body.businessUnitCode)&&body.payerType==="insurer"){
       if(!insurer)return out(400,{error:"Krankenkasse fehlt."});
       const dates=[];
       for(const item of items){
@@ -165,7 +165,7 @@ Deno.serve(async(req:Request)=>{
     if(!original||original.document_type!=="invoice"||original.status!=="cancelled")return out(409,{error:"Zuerst die Originalrechnung stornieren."});
     let header,items;
     try{items=correctionItems(body.items);header=correctionHeader(body,original,await loadIssuerSnapshot(db,unit.id))}catch(e){return out(400,{error:e.message})}
-    if(original.payer_type==="insurer"&&body.businessUnitCode==="fahrdienst"){
+    if(original.payer_type==="insurer"&&["fahrdienst","taxi"].includes(body.businessUnitCode)){
       if(!await resolveContract(db,unit.id,p.organization_id,original.insurer_id,header.serviceDate,undefined,body.serviceType==="wheelchair"?"wheelchair":"standard"))return out(409,{error:"Kein gültiger Vertrag am Leistungsdatum. Ersatzrechnung gesperrt."});
     }
     const {data,error}=await db.rpc("replace_finance_invoice",{p_original:original.id,p_unit:unit.id,p_actor:u.user.id,p_header:header,p_items:items});
