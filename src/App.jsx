@@ -1,3 +1,4 @@
+import AccountingManagement from './components/AccountingManagement.jsx';
 import ShiftReports from './components/ShiftReports.jsx';
 import FinanceReports from './components/FinanceReports.jsx';
 import DocumentManagement from './components/DocumentManagement.jsx';
@@ -228,6 +229,8 @@ function App() {
             <DriverManagement canEditDrivers={user.role===ROLES.ADMIN} drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
             <VehicleManagement vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
+          ) : active === 'buchhaltung' && can(PERMISSIONS.ACCOUNTING_MANAGE) ? (
+            <AccountingManagement/>
           ) : active === 'berichte' && can(PERMISSIONS.REPORTS_VIEW) ? (
             <div><div className="module-tabs finance-tabs" aria-label="Berichtsart"><button className={reportTab==='finance'?'active':''} onClick={()=>setReportTab('finance')}>Rechnungen & Kostenträger</button><button className={reportTab==='shifts'?'active':''} onClick={()=>setReportTab('shifts')}>Schichten & Kilometer</button></div>{reportTab==='finance'?<FinanceReports data={financeData}/>:<ShiftReports drivers={drivers}/>}</div>
           ) : active === 'disposition' ? (

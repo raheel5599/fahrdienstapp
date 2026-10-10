@@ -344,3 +344,7 @@ html{overflow-wrap:break-word}button:focus-visible,input:focus-visible,select:fo
 .finance-report .batch-card {min-width:0;overflow-wrap:anywhere;}
 .finance-report .batch-card h4 {margin:0;}
 .finance-report .batch-card > div {min-width:0;}
+
+.accounting-panel .batch-card {min-width:0;overflow-wrap:anywhere;}
+.accounting-panel .batch-card h4 {margin:0;}
+.accounting-panel .batch-card > div {min-width:0;}
