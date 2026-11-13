@@ -187,3 +187,11 @@ test('AOK preset cannot be saved against another insurer or the wrong mobility s
  setup.rows.health_insurers[0].name='AOK Hessen';assert.equal((await call('manage-contracts',setup,{...input,serviceType:'standard'})).status,400);
  const r=await call('manage-contracts',setup,input);assert.equal(r.status,200);const saved=setup.writes.find(w=>w.table==='payer_contracts')?.insert;assert.equal(saved.tariff_lines.find(l=>l.position_code==='753000').included_km,10);
 });
+test('5148 verifies entered copay against insurance and preserves meter total independently of km',async()=>{
+ const contract=aokPresetDraft('aok-hessen-sitzend-2026',{id:'group',business_unit_id:unit,insurer_id:'tk'});
+ const input={action:'recalculate',positionCode:'5148XX',treatmentCode:'05',vehicleClass:'taxi',journeyKind:'single',area:'inside',billableKm:8.5,meterAmount:37.5,confirmedOwnShare:5};
+ const setup=database([contract]);let r=await call('manage-trip-billing',setup,input);
+ assert.equal(r.status,200);assert.equal(r.body.case.billing_position,'514805');assert.equal(r.body.case.billable_km,8.5);assert.equal(r.body.case.gross_amount,37.5);assert.equal(r.body.case.insurer_amount,32.5);assert.equal(r.body.case.tariff_breakdown.length,1);
+ const bad=database([contract]);r=await call('manage-trip-billing',bad,{...input,confirmedOwnShare:3});assert.equal(r.status,409);assert.equal(bad.writes.length,0);
+ const exempt=database([contract]);exempt.rows.customer_insurances[0].exempt=true;r=await call('manage-trip-billing',exempt,{...input,confirmedOwnShare:0});assert.equal(r.status,200);assert.equal(r.body.case.own_share_amount,0);assert.equal(r.body.case.insurer_amount,37.5);
+});

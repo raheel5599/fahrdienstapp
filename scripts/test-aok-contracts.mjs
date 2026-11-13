@@ -26,6 +26,13 @@ try{
   const options=await billing.getByLabel('Position aus dem gewählten Vertrag').locator('option').allTextContents();assert(options.some(s=>s.includes('513020')));assert(!options.some(s=>s.includes('7501')));
   await billing.getByLabel('Position aus dem gewählten Vertrag').selectOption('5130XX');await billing.getByRole('button',{name:'Neu berechnen & speichern',exact:true}).scrollIntoViewIfNeeded();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}: billing overflow`);
   await page.screenshot({path:`test-results/aok-${name}-billing.png`});await billing.getByRole('button',{name:'Neu berechnen & speichern',exact:true}).click();await page.waitForFunction(()=>document.body.dataset.aokBillingSaved==='yes');
-  const input=await page.evaluate(()=>window.aokBillingInput);assert.equal(input.contractId,'aok-sitzend');assert.equal(input.positionCode,'5130XX');assert.equal(input.treatmentCode,'20');assert.deepEqual(errors,[]);await page.close();console.log(`${name}: AOK presets, catalogue and billing selection passed`);
+  const input=await page.evaluate(()=>window.aokBillingInput);assert.equal(input.contractId,'aok-sitzend');assert.equal(input.positionCode,'5130XX');assert.equal(input.treatmentCode,'20');assert.deepEqual(errors,[]);
+  await page.goto(origin+'/tests/ui/fixture.html?screen=aokbilling');await page.getByRole('button',{name:'Prüfen',exact:true}).click();
+  const meter=page.getByRole('dialog',{name:'Abrechnung prüfen'});await meter.getByLabel('Position aus dem gewählten Vertrag').selectOption('5148XX');
+  assert.equal(await meter.getByLabel('Wartezeit Minuten').count(),0);assert.equal(await meter.getByLabel('Pflichtfahrgebiet (Taxi)').count(),0);
+  await meter.getByLabel('Behandlung gemäß Verordnung').selectOption('05');await meter.getByLabel('Besetzte Abrechnungs-km').fill('8.5');await meter.getByLabel('Taxameter-Fahrpreis € (Gesamtbetrag)').fill('37.50');await meter.getByLabel('Eigenanteil € (optional zur Prüfung)').fill('5');
+  await meter.getByRole('button',{name:'Neu berechnen & speichern',exact:true}).click();await page.waitForFunction(()=>document.body.dataset.aokBillingSaved==='yes');
+  const m=await page.evaluate(()=>window.aokBillingInput);assert.equal(m.positionCode,'5148XX');assert.equal(m.treatmentCode,'05');assert.equal(m.area,'inside');assert.equal(m.vehicleClass,'taxi');assert.equal(m.meterAmount,'37.50');assert.equal(m.confirmedOwnShare,'5');
+  await page.screenshot({path:`test-results/aok-${name}-meter.png`});assert.deepEqual(errors,[]);await page.close();console.log(`${name}: AOK presets, catalogue and billing selection passed`);
  }
 }finally{await browser?.close();server.kill('SIGTERM');}

@@ -81,3 +81,17 @@ Der SQL-Test läuft gemeinsam mit der noch nicht angewendeten §302-Migration in
 einer abschließend zurückgerollten Transaktion. Wichtige Grenzfälle: 5/5,01 km,
 10/11 km, Taxameter als Menge, Behandlungswechsel, Fremdvertrag, falsches TK und
 nicht automatisch abrechenbare Sammel-/Sonderpreispositionen.
+
+### Erfassung der Taxameterposition
+
+Bei Auswahl von `5148XX` zeigt die Abrechnungsprüfung die besetzten Kilometer,
+den gesamten Taxameter-Fahrpreis vor Eigenanteilsabzug und einen optionalen
+Eigenanteil zur Kontrolle. Wartezeit, Fahrzeugklasse und Fahrtgebiet werden nicht
+nochmals abgefragt; diese Position setzt Taxi im Pflichtfahrgebiet und Wartezeit 0.
+Die Einzel-/Serienfahrt wird aus dem Fall beibehalten. Der Preis wird nicht aus
+Kilometern hochgerechnet. Ein eingegebener Eigenanteil muss mit der bestehenden
+Versicherungs-/Befreiungsberechnung am Fahrtag übereinstimmen; Abweichungen führen
+zu einer Fehlermeldung ohne Speicherung. Leer lässt die automatische Berechnung zu.
+`XX` bleibt intern die Tarifvorlage; Rechnungsposition und Export enthalten die
+sechsstellige Nummer, z.B. `514805`. Die Endung `00` ist laut Anlage 6 bei der
+Einsatzpauschale vorgesehen und wird für Taxameter nicht pauschal freigegeben.

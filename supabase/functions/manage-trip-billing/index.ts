@@ -103,6 +103,11 @@ Deno.serve(async(req)=>{
    const billingPosition=composeBillingPosition(pos,treatment);
    const copay=calculateOwnShare({gross,insurance,date:trip.service_date,positionCode:pos,lines:tariff.lines});
    const own=copay.amount;
+   if(/^5148/.test(String(pos||""))&&body.confirmedOwnShare!=null&&String(body.confirmedOwnShare).trim()!==""){
+     const entered=Number(body.confirmedOwnShare);
+     if(!Number.isFinite(entered)||entered<0||Math.abs(entered*100-Math.round(entered*100))>0.000001)return out(400,{error:"Eigenanteil als positiven Betrag oder 0 mit höchstens zwei Nachkommastellen angeben."});
+     if(cash(entered)!==own)return out(409,{error:"Eingegebener Eigenanteil stimmt nicht mit der Versicherung am Fahrtag überein. Erwartet: "+own.toFixed(2)+" €. Befreiung und Versicherungsdaten prüfen."});
+   }
    if(c.receipt_id&&cash(c.own_share_amount)!==own)return out(409,{error:"Quittierter Eigenanteil kann nicht verändert werden."});
    const review=[...tariff.review]; if(!insurance)review.push("Keine primäre Krankenversicherung."); if(insurance&&!insurerId)review.push("Kostenträger nicht zugeordnet."); if(insurance&&!contract)review.push(serviceType==='wheelchair'?"Kein gültiger eigener Rollstuhlvertrag.":"Kein aktiver Vertrag.");
    const patch={payer_type:"insurer",direction_count:1,copay_rule_version:COPAY_RULE_VERSION,copay_note:copay.note,insurance_id:insurance?.id||null,insurer_id:insurerId||null,contract_id:contract?.id||null,billable_km:km,base_fee:base,km_rate:rate,waiting_minutes:wait,waiting_amount:waiting,surcharge_amount:surcharge,wheelchair_surcharge_applied:false,gross_amount:gross,own_share_amount:own,insurer_amount:cash(gross-own),own_share_required:own>0,position_code:pos,treatment_code:treatment,billing_position:billingPosition,tariff_breakdown:tariff.lines,billing_vehicle_class:vehicleClass,billing_journey_kind:journeyKind,billing_area:area,meter_amount:meterAmount==null||meterAmount===''?null:Number(meterAmount),billing_status:!contract?"blocked":review.length?"review":"ready",review_message:review.join(" "),calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
