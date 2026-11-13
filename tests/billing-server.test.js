@@ -1,3 +1,4 @@
+import {aokPresetDraft} from '../supabase/functions/_shared/aokContracts.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -170,4 +171,19 @@ test('driver offline completion authenticates actor, invokes atomic RPC and keep
  const r=await call('manage-dispatch',setup,body);assert.equal(r.status,200);assert.equal(calls[0].name,'sync_driver_trip_status');assert.equal(calls[0].args.p_actor,'user');assert.equal(calls[0].args.p_unit,unit);assert.equal(calls[0].args.p_event,body.recordedAt);assert.equal(setup.writes.filter(w=>w.table==='trips').length,0);assert.equal(setup.writes.find(w=>w.table==='trip_billing_cases').insert.gross_amount,50);
  setup.rows.trip_billing_cases=[{id:'already',trip_id:'trip'}];setup.writes.length=0;assert.equal((await call('manage-dispatch',setup,body)).status,200);assert.equal(setup.writes.length,0);
  setup.db.rpc=async()=>({error:{message:'Reassigned'}});assert.equal((await call('manage-dispatch',setup,body)).status,409);assert.equal(setup.writes.length,0);
+});
+
+test('AOK recalculation accepts only a matching contract and stores exact wheelchair excess kilometers',async()=>{
+ const wheel=aokPresetDraft('aok-hessen-rollstuhl-2026',{id:'aok-wheel',insurer_id:'tk',business_unit_id:unit});
+ const setup=database([wheel]);setup.rows.health_insurers[0].name='AOK Hessen';setup.rows.trips[0].customer_mobility='wheelchair';
+ const r=await call('manage-trip-billing',setup,{action:'recalculate',contractId:'aok-wheel',billableKm:29,vehicleClass:'taxi',area:'outside',treatmentCode:'52',positionCode:''});
+ assert.equal(r.status,200);assert.equal(r.body.case.gross_amount,67.38);assert.equal(r.body.case.tariff_breakdown[1].quantity,19);assert.equal(r.body.case.tariff_breakdown[1].position_code,'753000');
+ const bad=await call('manage-trip-billing',setup,{action:'recalculate',contractId:'wrong',billableKm:29,vehicleClass:'taxi',area:'outside',treatmentCode:'52'});assert.equal(bad.status,409);
+});
+test('AOK preset cannot be saved against another insurer or the wrong mobility service',async()=>{
+ const setup=database();const source=aokPresetDraft('aok-hessen-rollstuhl-2026');
+ const input={action:'save_contract',contractScope:'individual',insurerId:'tk',contractName:source.contract_name,contractNumber:source.contract_number,serviceType:'wheelchair',tariffLines:source.tariff_lines};
+ assert.equal((await call('manage-contracts',setup,input)).status,400);
+ setup.rows.health_insurers[0].name='AOK Hessen';assert.equal((await call('manage-contracts',setup,{...input,serviceType:'standard'})).status,400);
+ const r=await call('manage-contracts',setup,input);assert.equal(r.status,200);const saved=setup.writes.find(w=>w.table==='payer_contracts')?.insert;assert.equal(saved.tariff_lines.find(l=>l.position_code==='753000').included_km,10);
 });

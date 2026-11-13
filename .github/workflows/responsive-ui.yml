@@ -28,6 +28,7 @@ jobs:
         env:
           UI_WEBKIT: '1'
       - run: npm run test:dta
+      - run: npm run test:aok
       - uses: actions/upload-artifact@v4
         if: always()
         with:

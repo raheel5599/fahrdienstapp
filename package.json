@@ -11,7 +11,8 @@
     "test:ui": "node scripts/test-responsive.mjs",
     "test:reports": "node scripts/test-finance-reports.mjs",
     "test:offline": "node scripts/test-driver-offline.mjs",
-    "test:dta": "node scripts/test-dta302.mjs"
+    "test:dta": "node scripts/test-dta302.mjs",
+    "test:aok": "node scripts/test-aok-contracts.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

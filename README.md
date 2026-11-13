@@ -64,3 +64,5 @@ Prüfungen: `npm test`, `npm run test:offline` und `tests/sql/driver-offline.sql
 ## Elektronische Kassenabrechnung (§302)
 
 Unter **Abrechnungen → Kassenabrechnung** werden bestehende Kassenrechnungen geprüft und als Test-Nutzdateien vorbereitet. Fehlende Zusatzangaben, Vertrag/Tarifzuordnung und Exportverlauf sind dort zusammengeführt. Dieser Stand enthält keinen Echtversand. Einrichtung, Freigabegrenzen und Prüfungen: [Kassenabrechnung §302](docs/kassenabrechnung-302.md).
+
+AOK-Vertragsvorlagen und vertragsabhängige Positionsauswahl: [AOK-Verträge 2026](docs/aok-contracts-2026.md). Weiterhin ausschließlich Testvorbereitung.

@@ -17,8 +17,16 @@ export function normalizeTariffLines(input) {
       price:Number(row.price), vehicle_class:row.vehicle_class || 'all', journey_kind:row.journey_kind || 'all', area:row.area || 'all',
       valid_from:row.valid_from || null, valid_until:row.valid_until || null,
       min_km:optionalNumber(row.min_km), max_km:optionalNumber(row.max_km),
-      treatment_code:String(row.treatment_code || '').trim(), active:row.active !== false, sort_order:index
+      treatment_code:String(row.treatment_code || '').trim(), active:row.active !== false, sort_order:index,
+      ...(row.included_km!=null?{included_km:Number(row.included_km)}:{}),
+      ...(row.meter_quantity?{meter_quantity:true}:{}),
+      ...(row.automatic===false?{automatic:false,calculation_note:String(row.calculation_note||'Gesonderte Prüfung erforderlich.').slice(0,500)}:{}),
+      ...(row.transport_type?{transport_type:String(row.transport_type)}:{}),
+      ...(row.allowed_treatment_codes?{allowed_treatment_codes:row.allowed_treatment_codes}:{}),
     };
+    if (line.included_km!=null&&(!Number.isFinite(line.included_km)||line.included_km<0||line.kind!=='km')) throw new Error(`Position ${index+1}: Freikilometer sind nur beim Kilometerpreis zulässig.`);
+    if (line.meter_quantity&&line.kind!=='meter') throw new Error(`Position ${index+1}: Betrag als Menge nur beim Taxameter zulässig.`);
+    if (line.allowed_treatment_codes&&(!Array.isArray(line.allowed_treatment_codes)||line.allowed_treatment_codes.some(c=>!/^\d{2}$/.test(c)))) throw new Error(`Position ${index+1}: Behandlungscodes ungültig.`);
     if (!line.label || !/^(?:\d{5,12}|\d{4}(?:XX)?)$/.test(line.position_code)) throw new Error(`Position ${index+1}: Bezeichnung und vollständige Positionsnummer bzw. Vorlage fehlen.`);
     if (!Object.hasOwn(tariffKinds,line.kind) || !Object.hasOwn(tariffUnits,line.unit)) throw new Error(`Position ${index+1}: Berechnungsart oder Einheit ungültig.`);
     if ((line.kind==='km' && line.unit!=='km') || (line.kind==='waiting' && !['hour','minute'].includes(line.unit)) || (!['km','waiting'].includes(line.kind) && !['ride','flat'].includes(line.unit))) throw new Error(`Position ${index+1}: Einheit passt nicht zur Berechnungsart.`);
@@ -36,7 +44,7 @@ export function normalizeTariffLines(input) {
   });
   for (let i=0;i<result.length;i++) for (let j=i+1;j<result.length;j++) {
     const a=result[i],b=result[j];
-    if (!a.active || !b.active || !periodOverlaps(a,b) || !intersects(a.vehicle_class,b.vehicle_class) || !intersects(a.journey_kind,b.journey_kind) || !intersects(a.area,b.area) || (a.treatment_code && b.treatment_code && a.treatment_code!==b.treatment_code) || (a.max_km!=null && b.min_km!=null && a.max_km<b.min_km) || (b.max_km!=null && a.min_km!=null && b.max_km<a.min_km)) continue;
+    if (a.automatic===false || b.automatic===false || !a.active || !b.active || !periodOverlaps(a,b) || !intersects(a.vehicle_class,b.vehicle_class) || !intersects(a.journey_kind,b.journey_kind) || !intersects(a.area,b.area) || (a.treatment_code && b.treatment_code && a.treatment_code!==b.treatment_code) || (a.max_km!=null && b.min_km!=null && a.max_km<b.min_km) || (b.max_km!=null && a.min_km!=null && b.max_km<a.min_km)) continue;
     if ((a.kind===b.kind && a.kind!=='surcharge') || a.position_code===b.position_code) throw new Error(`Tarifpositionen ${i+1} und ${j+1} überschneiden sich. Regeln oder Gültigkeitszeitraum trennen.`);
     if (['flat','meter'].includes(a.kind) && ['base','km','flat','meter'].includes(b.kind) || ['flat','meter'].includes(b.kind) && ['base','km','flat','meter'].includes(a.kind)) throw new Error('Pauschale/Taxameter und Grundpreis/km dürfen nicht gleichzeitig für dieselbe Fahrt gelten.');
   }
@@ -61,30 +69,36 @@ export function calculateTariff(contract, legacyRates, input) {
     return {lines:position?[{position_code:position,template,label:'Krankenfahrt gemäß Vertrag',quantity:1,unit:'ride',price:gross,amount:gross,kind:'flat'}]:[],gross,review,base,kmRate,waiting,surcharge:0};
   }
   const normalized=normalizeTariffLines(contract.tariff_lines);
-  const rates=normalized.filter(r=>r.active&&(!r.valid_from||r.valid_from<=date)&&(!r.valid_until||r.valid_until>=date)&&(!r.treatment_code||r.treatment_code===treatmentCode));
+  const requested=normalized.find(r=>r.position_code===input.positionCode);
+  if(requested?.automatic===false)return {lines:[],gross:0,review:[requested.calculation_note],base:0,kmRate:0,waiting:0,surcharge:0};
+  const rates=normalized.filter(r=>r.automatic!==false&&r.active&&(!r.valid_from||r.valid_from<=date)&&(!r.valid_until||r.valid_until>=date)&&(!r.treatment_code||r.treatment_code===treatmentCode));
   const review=[];
   if (rates.some(r=>r.vehicle_class!=='all') && !['taxi','mietwagen'].includes(input.vehicleClass)) review.push('Taxi oder Mietwagen auswählen.');
   const vehicleRates=rates.filter(r=>r.vehicle_class==='all'||r.vehicle_class===input.vehicleClass);
   if(vehicleRates.some(r=>r.area!=='all')&&!['inside','outside'].includes(input.area))review.push('Pflichtfahrgebiet: innerhalb oder außerhalb auswählen.');
   const applicable=vehicleRates.filter(r=>(r.journey_kind==='all'||r.journey_kind===input.journeyKind)&&(r.area==='all'||r.area===input.area)&&(r.min_km==null||km>=r.min_km)&&(r.max_km==null||km<=r.max_km));
   // A valid base fee alone must not hide a gap in a configured kilometer tariff.
-  const configured=normalized.filter(r=>r.active&&(r.vehicle_class==='all'||r.vehicle_class===input.vehicleClass)&&(r.journey_kind==='all'||r.journey_kind===input.journeyKind)&&(r.area==='all'||r.area===input.area)&&(!r.treatment_code||r.treatment_code===treatmentCode)&&(r.min_km==null||km>=r.min_km)&&(r.max_km==null||km<=r.max_km));
+  const configured=normalized.filter(r=>r.automatic!==false&&r.active&&(r.vehicle_class==='all'||r.vehicle_class===input.vehicleClass)&&(r.journey_kind==='all'||r.journey_kind===input.journeyKind)&&(r.area==='all'||r.area===input.area)&&(!r.treatment_code||r.treatment_code===treatmentCode)&&(r.min_km==null||km>=r.min_km)&&(r.max_km==null||km<=r.max_km));
   if(!applicable.some(r=>['flat','meter'].includes(r.kind)))for(const kind of ['base','km'])if(configured.some(r=>r.kind===kind)&&!applicable.some(r=>r.kind===kind))review.push(`Keine gültige ${tariffKinds[kind]}-Position am Fahrtag.`);
   if(applicable.some(r=>r.kind==='km')&&km<=0)review.push('Abrechnungs-km fehlen.');
   if(!applicable.some(r=>['base','km','flat','meter'].includes(r.kind)))review.push('Keine passende Grund-, Kilometer-, Pauschal- oder Taxameterposition am Fahrtag.');
   const lines=[];
   for(const rate of applicable){
+    if(rate.allowed_treatment_codes&&!rate.allowed_treatment_codes.includes(treatmentCode)){review.push(`Behandlung für ${rate.position_code} aus der Vertragsliste auswählen.`);continue;}
     const position=composeBillingPosition(rate.position_code,treatmentCode);
     if(!position){review.push(`Behandlungscode für ${rate.position_code} fehlt.`);continue;}
-    const quantity=rate.kind==='km'?km:rate.kind==='waiting'?(rate.unit==='hour'?waitingMinutes/60:waitingMinutes):1;
+    let quantity=rate.kind==='km'?Math.max(0,moneyRound(km-(rate.included_km||0))):rate.kind==='waiting'?(rate.unit==='hour'?waitingMinutes/60:waitingMinutes):1;
     let price=rate.price;
     if(rate.kind==='meter'){
       price=Number(input.meterAmount);
       if(!Number.isFinite(price)||price<=0){review.push('Taxameterbetrag fehlt.');continue;}
     }
+    if(rate.kind==='meter'&&rate.meter_quantity){quantity=price;price=1;}
     if(quantity<=0)continue;
     lines.push({rate_id:rate.id,position_code:position,template:rate.position_code,label:rate.label,kind:rate.kind,quantity,unit:rate.unit,price,amount:moneyRound(quantity*price)});
   }
+  if(normalized.some(r=>r.allowed_treatment_codes)&&input.positionCode&&!normalized.some(r=>r.position_code===input.positionCode))review.push('Gewählte Positionsvorlage gehört nicht zum Vertrag.');
+  if(normalized.some(r=>r.allowed_treatment_codes)&&requested&&requested.automatic!==false&&!lines.some(l=>l.template===requested.position_code))review.push('Gewählte Position passt nicht zu Kilometerzahl, Fahrtgebiet oder Behandlung.');
   const sum=kind=>moneyRound(lines.filter(l=>l.kind===kind).reduce((s,l)=>s+l.amount,0));
   return {lines,gross:moneyRound(lines.reduce((s,l)=>s+l.amount,0)),review,base:sum('base'),kmRate:lines.find(l=>l.kind==='km')?.price||0,waiting:sum('waiting'),surcharge:sum('surcharge')};
 }

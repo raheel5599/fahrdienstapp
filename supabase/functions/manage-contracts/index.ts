@@ -38,9 +38,14 @@ Deno.serve(async(req:Request)=>{
     if(scope==="group"&&body.contractGroup!=="ersatzkassen")return out(400,{error:"Ungültige Vertragsgruppe."});
     if(scope==="individual"&&!body.insurerId)return out(400,{error:"Krankenkasse fehlt."});
     if(body.validFrom&&body.validUntil&&body.validFrom>body.validUntil)return out(400,{error:"Gültigkeitszeitraum ist ungültig."});
-    const {data:insurer}=await db.from("health_insurers").select("id").eq("id",body.insurerId||"00000000-0000-0000-0000-000000000000").eq("organization_id",p.organization_id).maybeSingle();
+    const {data:insurer}=await db.from("health_insurers").select("id,name,short_name").eq("id",body.insurerId||"00000000-0000-0000-0000-000000000000").eq("organization_id",p.organization_id).maybeSingle();
     if(scope==="individual"&&!insurer) return out(404,{error:"Krankenkasse nicht gefunden."});
     const data={business_unit_id:unit.id,insurer_id:scope==="individual"?body.insurerId:null,contract_scope:scope,contract_group:group,applies_to_group:group,contract_number:txt(body.contractNumber),contract_name:txt(body.contractName),valid_from:txt(body.validFrom),valid_until:txt(body.validUntil),billing_method:["individual","flat_rate","mixed"].includes(body.billingMethod)?body.billingMethod:"individual",base_fee:num(body.baseFee),price_per_km:num(body.pricePerKm),waiting_per_hour:num(body.waitingPerHour),wheelchair_surcharge:num(body.wheelchairSurcharge),copay_min:num(body.copayMin||5),copay_max:num(body.copayMax||10),copay_percent:num(body.copayPercent||10),active:body.active!==false,notes:txt(body.notes),updated_at:new Date().toISOString()};
+    if(/^4606(?:280|460)$/.test(String(data.contract_number||''))){
+      if(scope!=='individual'||!/(^|\s)aok(\s|$)/i.test(`${insurer?.name||''} ${insurer?.short_name||''}`))return out(400,{error:'Diese AOK-Vertragsvorlage darf nur einer AOK zugeordnet werden.'});
+      const expected=data.contract_number==='4606460'?'wheelchair':'standard';
+      if((body.serviceType||'standard')!==expected)return out(400,{error:'AOK-Schlüssel passt nicht zum Leistungsbereich.'});
+    }
     let tariffLines;
     if(body.tariffLines!==undefined){
       try{tariffLines=normalizeTariffLines(body.tariffLines)}catch(e){return out(400,{error:e.message})}

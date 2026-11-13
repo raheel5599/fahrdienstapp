@@ -53,11 +53,12 @@ begin
  if not exists(select 1 from public.health_insurers h join public.business_units b on b.organization_id=h.organization_id where b.id=p_unit and h.id=p_insurer) then raise exception 'Kasse gehört nicht zum Geschäftsbereich.';end if;
  select jsonb_build_object('route',coalesce((select config from public.dta302_routes where business_unit_id=p_unit and insurer_id=p_insurer),'{}'),
  'records',coalesce(jsonb_agg(x.record order by x.case_id),'[]')) into result from (
- select c.id case_id,jsonb_build_object('billing',to_jsonb(c),'invoice',to_jsonb(i),'trip',to_jsonb(t),'customer',to_jsonb(p),'insurer',to_jsonb(h),'insurance',to_jsonb(a),
+ select c.id case_id,jsonb_build_object('billing',to_jsonb(c),'contract',to_jsonb(pc),'invoice',to_jsonb(i),'trip',to_jsonb(t),'customer',to_jsonb(p),'insurer',to_jsonb(h),'insurance',to_jsonb(a),
  'metadata',coalesce(m.metadata,'{}'),
  'items',coalesce((select jsonb_agg(to_jsonb(l) order by l.sort_order,l.id) from public.invoice_items l where l.invoice_id=i.id),'[]'),
  'zadActive',exists(select 1 from public.billing_submission_items z where z.invoice_id=i.id and z.released_at is null)) record
  from public.trip_billing_cases c
+ left join public.payer_contracts pc on pc.id=c.contract_id and pc.business_unit_id=c.business_unit_id
  left join public.invoices i on i.id=c.invoice_id and i.business_unit_id=c.business_unit_id
  left join public.trips t on t.id=c.trip_id and t.business_unit_id=c.business_unit_id
  left join public.customers p on p.id=c.customer_id
@@ -91,6 +92,7 @@ begin
  perform 1 from public.customers where id in(select customer_id from public.trip_billing_cases where business_unit_id=p_unit and id=any(p_cases)) order by id for share;
  perform 1 from public.customer_insurances where id in(select insurance_id from public.trip_billing_cases where business_unit_id=p_unit and id=any(p_cases)) order by id for share;
  perform 1 from public.health_insurers where id=p_insurer for share;
+ perform 1 from public.payer_contracts where id in(select contract_id from public.trip_billing_cases where business_unit_id=p_unit and id=any(p_cases)) order by id for share;
  context=public.dta302_context(p_unit,p_actor,p_insurer,p_cases);
  if context is distinct from p_expected or jsonb_array_length(context->'records')<>cardinality(p_cases) then raise exception 'Abrechnungsdaten geändert. Neu laden und prüfen.';end if;
  if exists(select 1 from jsonb_array_elements(context->'records') r where r->'invoice'->>'status' is distinct from 'open' or r->'invoice'->>'document_type' is distinct from 'invoice' or r->'billing'->>'billing_status' is distinct from 'invoiced' or (r->>'zadActive')::boolean) then raise exception 'Nur offene Originalrechnungen ohne ZAD-Zuordnung exportieren.';end if;

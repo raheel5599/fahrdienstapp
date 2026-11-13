@@ -90,6 +90,8 @@ export function normalizeRecord(record, route, today = berlinDate()) {
   if (i.id !== c.invoice_id || i.customer_id !== p.id || i.insurer_id !== h.id || t.id !== c.trip_id || t.customer_id !== p.id || i.service_date !== t.service_date || i.payer_type !== 'insurer' || c.customer_id !== p.id || c.insurer_id !== h.id) throw Error('Rechnungs- und Fahrtbezug widersprüchlich.');
   if (c.copay_rule_version !== 1 || Number(c.direction_count) !== 1) throw Error('Eigenanteil und Fahrtrichtung zuerst in der Abrechnung prüfen.');
   if (route && c.contract_id !== route.contractId) throw Error('Abrechnungsfall gehört zu einem anderen Vertrag. Passende Kassenanbindung auswählen.');
+  const contractActk=plain(record.contract?.contract_number).replace(/\s/g,'');
+  if(/^4606(?:280|460)$/.test(contractActk)&&route?.tariff!==contractActk.slice(2))throw Error('Tarifkennzeichen passt nicht zum AOK-Vertrag.');
   const date = day(t.service_date, 'Leistungsdatum');
   if (date > today) throw Error('Leistungsdatum liegt in der Zukunft.');
   const nr = plain(i.invoice_number);

@@ -15,14 +15,14 @@ export async function loadBilling(){
   const u=await unit();
   const rows=await readPages(()=>supabase.from('trip_billing_cases').select('*',{count:'exact'}).eq('business_unit_id',u.id).order('created_at',{ascending:false}).order('id'));
   const tripIds=[...new Set(rows.map(x=>x.trip_id).filter(Boolean))],customerIds=[...new Set(rows.map(x=>x.customer_id).filter(Boolean))];
-  const insurerIds=[...new Set(rows.map(x=>x.insurer_id).filter(Boolean))],contractIds=[...new Set(rows.map(x=>x.contract_id).filter(Boolean))];
-  const [trips,customers,insurers,contracts,rates]=await Promise.all([
+  const insurerIds=[...new Set(rows.map(x=>x.insurer_id).filter(Boolean))];
+  const [trips,customers,insurers,contracts]=await Promise.all([
     readByIds(tripIds,ids=>supabase.from('trips').select('*',{count:'exact'}).eq('business_unit_id',u.id).in('id',ids).order('id')),
     readByIds(customerIds,ids=>supabase.from('customers').select('id,first_name,last_name',{count:'exact'}).in('id',ids).order('id')),
-    readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name,ik_number',{count:'exact'}).in('id',ids).order('id')),
-    readByIds(contractIds,ids=>supabase.from('payer_contracts').select('*',{count:'exact'}).in('id',ids).order('id')),
-    readByIds(contractIds,ids=>supabase.from('contract_rates').select('*',{count:'exact'}).in('contract_id',ids).eq('active',true).order('sort_order').order('id'))
+    readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name,ik_number,active',{count:'exact'}).in('id',ids).order('id')),
+    readPages(()=>supabase.from('payer_contracts').select('*',{count:'exact'}).eq('business_unit_id',u.id).order('id'))
   ]);
+  const rates=await readByIds(contracts.map(c=>c.id),ids=>supabase.from('contract_rates').select('*',{count:'exact'}).in('contract_id',ids).eq('active',true).order('sort_order').order('id'));
   return {unit:u,cases:rows,trips,customers,insurers,contracts,rates};
 }
 

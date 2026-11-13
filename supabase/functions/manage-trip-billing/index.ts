@@ -80,7 +80,8 @@ Deno.serve(async(req)=>{
      if(!insurerId&&insurance.insurer_name){const {data}=await db.from("health_insurers").select("id").eq("organization_id",p.organization_id).ilike("name",insurance.insurer_name).eq("active",true).maybeSingle();insurerId=data?.id;}
    }
    const serviceType=tripServiceType(trip);
-   const contract=await resolveContract(db,unit.id,p.organization_id,insurerId,trip.service_date,c.contract_id,serviceType);
+   const contract=await resolveContract(db,unit.id,p.organization_id,insurerId,trip.service_date,body.contractId||c.contract_id,serviceType);
+   if(body.contractId&&contract?.id!==body.contractId)return out(409,{error:"Gewählter Vertrag passt nicht zu Krankenkasse, Fahrtag oder Leistungsbereich."});
    let pos=String(body.positionCode ?? (contract?.id===c.contract_id?c.position_code:"") ?? "").trim()||null;
    let legacyRates=[];
    if(contract?.id&&contract.tariff_lines==null){const {data:r,error}=await db.from("contract_rates").select("*").eq("contract_id",contract.id).eq("active",true).order("sort_order");if(error)return out(400,{error:error.message});legacyRates=r||[];if(!pos)pos=legacyRates[0]?.position_code||null}
