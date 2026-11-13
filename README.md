@@ -60,3 +60,7 @@ Die Serverfunktion prüft bei jedem Sendeversuch das aktive Konto, seinen Gesch�
 Schichtbeginn, Pausen und Schichtende benötigen weiterhin Verbindung. Schichtänderungen und Kontoabmeldung sind mit offenen Fahrtmeldungen gesperrt. Beim Abmelden bzw. Sperren des Zugangs werden die Offline-Identität und sensiblen Auftrags-/Schichtsnapshots entfernt. Falls eine externe Abmeldung offene Meldungen unterbricht, bleiben nur die nach Konto/Einheit getrennten Statuskennungen und Zeiten zur späteren Klärung erhalten. Löschen von Browserdaten, privater Browsermodus oder Geräteverlust kann noch nicht übertragene Daten entfernen.
 
 Prüfungen: `npm test`, `npm run test:offline` und `tests/sql/driver-offline.sql` mit zurückgerollten synthetischen Daten. `UI_WEBKIT=1 npm run test:offline` prüft Chromium und WebKit auf kleinem Handy, iPad und Desktop. Für WebKit wird wegen des dokumentierten Playwright-Fehlers [#42775](https://github.com/microsoft/playwright/issues/42775) der lokale Testserver abgeschaltet, anstatt die fehlerhafte Offline-Emulation zu verwenden; das Neuladen muss dabei tatsächlich ein neues Dokument aus dem Service Worker starten.
+
+## Elektronische Kassenabrechnung (§302)
+
+Unter **Abrechnungen → Kassenabrechnung** werden bestehende Kassenrechnungen geprüft und als Test-Nutzdateien vorbereitet. Fehlende Zusatzangaben, Vertrag/Tarifzuordnung und Exportverlauf sind dort zusammengeführt. Dieser Stand enthält keinen Echtversand. Einrichtung, Freigabegrenzen und Prüfungen: [Kassenabrechnung §302](docs/kassenabrechnung-302.md).

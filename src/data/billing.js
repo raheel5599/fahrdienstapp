@@ -19,7 +19,7 @@ export async function loadBilling(){
   const [trips,customers,insurers,contracts,rates]=await Promise.all([
     readByIds(tripIds,ids=>supabase.from('trips').select('*',{count:'exact'}).eq('business_unit_id',u.id).in('id',ids).order('id')),
     readByIds(customerIds,ids=>supabase.from('customers').select('id,first_name,last_name',{count:'exact'}).in('id',ids).order('id')),
-    readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name',{count:'exact'}).in('id',ids).order('id')),
+    readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name,ik_number',{count:'exact'}).in('id',ids).order('id')),
     readByIds(contractIds,ids=>supabase.from('payer_contracts').select('*',{count:'exact'}).in('id',ids).order('id')),
     readByIds(contractIds,ids=>supabase.from('contract_rates').select('*',{count:'exact'}).in('contract_id',ids).eq('active',true).order('sort_order').order('id'))
   ]);
