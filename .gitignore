@@ -4,3 +4,12 @@ dist/
 .env.*
 supabase/.temp/
 test-results/
+
+# Local ITSG certificate material must never be committed.
+__pycache__/
+ITSG-Antraege/
+**/PRIVATE-KEY.encrypted.pem
+**/*.p10
+**/SHA256-Pruefblatt.pdf
+
+.venv-itsg/
