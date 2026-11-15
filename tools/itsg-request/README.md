@@ -23,7 +23,7 @@ Python 3.10+ installieren und im Repository:
 
 ```sh
 python3 -m venv .venv-itsg
-.venv-itsg/bin/python -m pip install -r tools/itsg-request/requirements.txt
+.venv-itsg/bin/python -m pip install --only-binary=:all: -r tools/itsg-request/requirements.txt
 ```
 
 Unter Windows statt `.venv-itsg/bin/python` den Aufruf
@@ -108,3 +108,17 @@ Quellen:
 - https://www.itsg.de/produkte/trust-center/zertifikat-beantragen/
 - https://www.itsg.de/wp-content/uploads/2023/03/Informationen-zu-den-Antragsformen-beim-ITSG-Trust-Center.pdf
 - https://www.gkv-datenaustausch.de/media/dokumente/standards_und_normen/technische_spezifikationen/Anlage_16_-_Security_Schnittstelle.pdf
+
+## Intel-Mac: Installation ohne Rust-/OpenSSL-Build
+
+Ab cryptography 49 werden keine x86_64-macOS-Wheels mehr bereitgestellt.
+Die Plattformauswahl verwendet daher auf Intel-macOS gezielt 48.0.0, auf anderen
+Plattformen weiterhin 50.0.0. 48.0.0 bietet ein universal2-Wheel für macOS 10.9+
+und CPython 3.11 ABI3, das auch Python 3.13 unterstützt. Der Generator und seine
+sechs synthetischen Prüfungen wurden zusätzlich mit 48.0.0 ausgeführt.
+`--only-binary=:all:` verhindert unbemerkte lokale Compilerläufe.
+Dieser Kompatibilitätspfad ist für die lokale Antragserzeugung; er fügt keinen
+PKCS#7-Entschlüsselungsdienst hinzu.
+
+Quelle: https://cryptography.io/en/stable/changelog/ (49.0.0) und
+https://pypi.org/project/cryptography/48.0.0/ (macOS universal2-Wheel).

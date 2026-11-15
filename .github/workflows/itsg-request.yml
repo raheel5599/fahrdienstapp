@@ -11,11 +11,15 @@ permissions:
 jobs:
   synthetic-request:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cryptography: ['48.0.0', '50.0.0']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install -r tools/itsg-request/requirements-test.txt
+      - run: python -m pip install --only-binary=:all: cryptography==${{ matrix.cryptography }}
       - name: Test synthetic requests and encrypted backup only
         run: python -m unittest discover -s tools/itsg-request -p 'test_*.py' -v
