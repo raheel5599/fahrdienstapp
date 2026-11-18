@@ -236,7 +236,7 @@ function App() {
           ) : active === 'kassen' && can(PERMISSIONS.CONTRACTS_MANAGE) ? (
             <ContractManagement data={contractData} />
           ) : active === 'termine' && can(PERMISSIONS.SCHEDULE_MANAGE) ? (
-            <ScheduleManagement data={scheduleData} clients={clientData.clients} />
+            <ScheduleManagement data={scheduleData} clients={clientData.clients} onNewTrip={()=>setDispatchOpen(true)} />
           ) : active === 'fahrer' && can(PERMISSIONS.DRIVERS_MANAGE) ? (
             <DriverManagement canEditDrivers={user.role===ROLES.ADMIN} drivers={drivers} vehicles={fleet.vehicles} loading={fleet.loading} error={fleet.error} refresh={fleet.refresh} />
           ) : active === 'fahrzeuge' && can(PERMISSIONS.VEHICLES_MANAGE) ? (
@@ -248,13 +248,13 @@ function App() {
           ) : active === 'berichte' && can(PERMISSIONS.REPORTS_VIEW) ? (
             <div><div className="module-tabs finance-tabs" aria-label="Berichtsart"><button className={reportTab==='finance'?'active':''} onClick={()=>setReportTab('finance')}>Rechnungen & Kostenträger</button><button className={reportTab==='shifts'?'active':''} onClick={()=>setReportTab('shifts')}>Schichten & Kilometer</button><button className={reportTab==='utilization'?'active':''} onClick={()=>setReportTab('utilization')}>Fahrer & Fahrzeuge</button></div>{reportTab==='finance'?<FinanceReports data={financeData}/>:reportTab==='shifts'?<ShiftReports drivers={drivers}/>:<UtilizationReports/>}</div>
           ) : active === 'disposition' ? (
-            <div><div className="module-tabs finance-tabs" aria-label="Fahrtenansicht"><button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button><button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button></div>{dispatchTab==='history'?<TripHistory clients={clientData.clients} onRecorded={()=>Promise.all([dispatchData.refresh(),billingData.refresh()])}/>:<LiveDispatchBoard data={dispatchData} drivers={drivers} vehicles={fleet.vehicles} onNew={()=>setDispatchOpen(true)} onEdit={id=>setDispatchOpen(id)}/>}</div>
+            <div><div className="module-tabs finance-tabs" aria-label="Fahrtenansicht"><button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button><button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button></div>{dispatchTab==='history'?<TripHistory clients={clientData.clients} onRecorded={()=>Promise.all([dispatchData.refresh(),billingData.refresh()])}/>:<LiveDispatchBoard data={dispatchData} drivers={drivers} vehicles={fleet.vehicles} onNew={date=>setDispatchOpen({date})} onEdit={id=>setDispatchOpen(id)}/>}</div>
           ) : active === 'dashboard' ? (
             <LiveDispatchBoard
               data={dispatchData}
               drivers={drivers}
               vehicles={fleet.vehicles}
-              onNew={() => setDispatchOpen(true)}
+              onNew={date => setDispatchOpen({date})}
               onEdit={id => setDispatchOpen(id)}
             />
           ) : (
@@ -269,8 +269,8 @@ function App() {
       </nav>
 
       {dispatchOpen && can(PERMISSIONS.TRIPS_MANAGE) && (
-        <LiveDispatchModal
-          trip={dispatchOpen === true ? null : dispatchData.trips.find(item => item.id === dispatchOpen)}
+        <LiveDispatchModal initialDate={dispatchOpen?.date}
+          trip={typeof dispatchOpen==='string' ? dispatchData.trips.find(item => item.id === dispatchOpen) : null}
           trips={dispatchData.trips}
           clients={clientData.clients}
           drivers={drivers}

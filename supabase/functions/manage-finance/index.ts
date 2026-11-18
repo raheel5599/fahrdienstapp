@@ -1,3 +1,4 @@
+import {receiptLabels,taxiBrand} from "../_shared/rideCategories.js";
 import {correctionReason,correctionItems,correctionHeader} from "../_shared/financeCorrections.js";
 import {normalizeProfile,loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,tripServiceType} from "../_shared/contracts.js";
@@ -183,17 +184,18 @@ Deno.serve(async(req:Request)=>{
     const allowedTypes=body.businessUnitCode==="taxi"
       ? ["city_trip","airport_trip","courier_trip"]
       : body.businessUnitCode==="fahrdienst"
-        ? ["own_share"]
+        ? Object.keys(receiptLabels)
         : [];
     const receiptType=String(body.receiptType||"");
     if(!allowedTypes.includes(receiptType))return out(400,{error:"Ungültige Quittungsart für diesen Geschäftsbereich."});
-    const labels:any={city_trip:"Stadtfahrt",airport_trip:"Flughafenfahrt",courier_trip:"Kurierfahrt",own_share:"Eigener Anteil"};
+
     const receivedFrom=txt(body.receivedFrom,180);
     if(amount<=0||!receivedFrom)return out(400,{error:"Zahler und Betrag sind erforderlich."});
     let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
+    if(receiptType!=="own_share")issuer={...issuer,trade_name:taxiBrand};
     const {data:receipt,error}=await db.from("receipts").insert({
       business_unit_id:unit.id,issuer_snapshot:issuer,customer_id:body.customerId||null,invoice_id:body.invoiceId||null,
-      received_from:receivedFrom,purpose:labels[receiptType],receipt_type:receiptType,amount,
+      received_from:receivedFrom,purpose:receiptLabels[receiptType],receipt_type:receiptType,amount,
       concession_number:txt(body.concessionNumber,120),from_address:txt(body.fromAddress,300),to_address:txt(body.toAddress,300),
       payment_method:method,payment_date:txt(body.paymentDate,10)||new Date().toISOString().slice(0,10),
       notes:txt(body.notes,1000),created_by:u.user.id

@@ -1,3 +1,4 @@
+import {isTaxiTrip} from "../_shared/rideCategories.js";
 import {calculateOwnShare,privateFare,COPAY_RULE_VERSION} from "../_shared/copay.js";
 import {calculateTariff} from "../_shared/tariffs.js";
 import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
@@ -108,12 +109,13 @@ Deno.serve(async(req:Request)=>{
     const toAddress=clean(body.toAddress);
     if(!serviceDate||!scheduledTime||!fromAddress||!toAddress)return reply(400,{error:"Datum, Uhrzeit, Abhol- und Zieladresse sind erforderlich."});
 
-    const billingPayerType=body.billingPayerType||"auto";if(!["auto","private","insurer"].includes(billingPayerType))return reply(400,{error:"Kostenträger ist ungültig."});
+    const tripType=clean(body.tripType)||"Krankenfahrt";
+    const billingPayerType=isTaxiTrip(tripType)?"private":body.billingPayerType||"auto";if(!["auto","private","insurer"].includes(billingPayerType))return reply(400,{error:"Kostenträger ist ungültig."});
     const privateVatRate=Number(body.privateVatRate??0);if(![0,7,19].includes(privateVatRate))return reply(400,{error:"Steuersatz ist ungültig."});
     let fare:any=null;if(billingPayerType==="private"&&body.privatePrice!=null&&body.privatePrice!==""){try{fare=privateFare({amount:body.privatePrice,vatRate:body.privateVatRate})}catch(e){return reply(400,{error:e.message})}}
     const {data:trip,error}=await db.from("trips").insert({
       business_unit_id:unit.id,customer_id:customer.id,service_date:serviceDate,scheduled_time:scheduledTime,billing_payer_type:billingPayerType,private_price:fare?.gross||null,private_vat_rate:privateVatRate,
-      direction:String(body.direction||"outbound"),trip_type:clean(body.tripType)||"Krankenfahrt",
+      direction:String(body.direction||"outbound"),trip_type:tripType,
       from_address:fromAddress,to_address:toAddress,status:"offen",notes:clean(body.notes),
       customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),
       customer_mobility:customer.mobility,created_by:user.id,updated_by:user.id
@@ -217,7 +219,7 @@ Deno.serve(async(req:Request)=>{
     }
 
     let updated:any;
-    if(unitCode==='taxi'&&['auf_dem_weg','angekommen','in_fahrt'].includes(nextStatus)&&trip.driver_id){
+    if(['taxi','fahrdienst'].includes(unitCode)&&['auf_dem_weg','angekommen','in_fahrt'].includes(nextStatus)&&trip.driver_id){
       const {data:rides,error:rideError}=await db.from('taxi_live_rides').select('id').eq('business_unit_id',unit.id).eq('driver_id',trip.driver_id).in('status',['assigned','to_pickup','arrived','occupied']).limit(1);
       if(rideError)return reply(503,{error:'Aktive Taxifahrt konnte nicht geprüft werden.'});
       if(rides?.length)return reply(409,{error:'Einsteigerfahrt zuerst beenden.'});
