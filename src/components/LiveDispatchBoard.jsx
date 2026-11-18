@@ -46,13 +46,13 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,su
             <span className="dispatch-filter-control">
               <span aria-hidden="true">{date.split('-').reverse().join('.')}</span>
               <CalendarDays size={17} aria-hidden="true"/>
-              <input type="date" value={date} onChange={event=>setDate(event.target.value||today)}/>
+              <input aria-label="Datum" type="date" value={date} onChange={event=>setDate(event.target.value||today)}/>
             </span>
           </label>
           <label>
             <span>Bereich</span>
             <span className="dispatch-filter-control">
-              <select value={business} onChange={event=>setBusiness(event.target.value)}>
+              <select aria-label="Bereich" value={business} onChange={event=>setBusiness(event.target.value)}>
                 <option value="all">Alle Fahrten</option>
                 <option value="taxi">{taxiBrand}</option>
                 <option value="medical">{medicalBrand}</option>
