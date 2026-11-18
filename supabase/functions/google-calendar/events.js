@@ -1,0 +1,43 @@
+const eventsUrl = 'https://www.googleapis.com/calendar/v3/calendars/';
+
+export function eventPayload(job) {
+  const start = new Date(job.start_at);
+  return {
+    summary: 'Fahrt · ' + job.trip_id.slice(0, 8).toUpperCase(),
+    start: {dateTime: start.toISOString(), timeZone: 'Europe/Berlin'},
+    // Dispatch supplies a scheduled departure, not an agreed end time.
+    end: {dateTime: new Date(start.getTime() + 60 * 60000).toISOString(), timeZone: 'Europe/Berlin'},
+    endTimeUnspecified: true, visibility: 'private'
+  };
+}
+
+export async function verifyCalendar(calendar, token, request = fetch) {
+  const url = eventsUrl + encodeURIComponent(calendar) + '/events?maxResults=1&fields=accessRole';
+  const res = await request(url, {headers:{Authorization:'Bearer ' + token}, signal:AbortSignal.timeout(10000)});
+  if (!res.ok || !['owner','writer'].includes((await res.json()).accessRole)) {
+    throw Error('Kalender-ID und Freigabe zum Ändern von Terminen prüfen.');
+  }
+}
+
+export async function syncEvent(job, token, request = fetch) {
+  const base = eventsUrl + encodeURIComponent(job.calendar_id) + '/events';
+  const headers = {Authorization:'Bearer ' + token, 'Content-Type':'application/json'};
+  const send = (url, method, body) => request(url, {
+    method, headers, signal:AbortSignal.timeout(10000), body:body ? JSON.stringify(body) : undefined
+  });
+  const id = 'fa' + job.trip_id.replaceAll('-','');
+  // Google accepts lower-case base32hex characters for caller-assigned IDs.
+  const url = base + '/' + id;
+  if (job.removed) {
+    const res = await send(url + '?sendUpdates=none', 'DELETE');
+    if (res.ok || [404,410].includes(res.status)) return;
+    throw Error('Google Kalender meldet HTTP ' + res.status);
+  }
+  const payload = eventPayload(job);
+  let res = await send(url + '?sendUpdates=none', 'PATCH', payload);
+  if (res.status === 404) {
+    res = await send(base + '?sendUpdates=none', 'POST', {...payload, id});
+    if (res.status === 409) res = await send(url + '?sendUpdates=none', 'PATCH', payload);
+  }
+  if (!res.ok) throw Error('Google Kalender meldet HTTP ' + res.status);
+}

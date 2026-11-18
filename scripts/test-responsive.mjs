@@ -13,6 +13,14 @@ try{
  try{for(const[size,width,height]of[['mobile',390,844],['small-mobile',320,568],['ipad-portrait',768,1024],['ipad-landscape',1024,768],['desktop',1440,900]]){
  const page=await browser.newPage({viewport:{width,height}});
  await page.route('**/*',r=>(r.request().url().startsWith(origin)||r.request().url().startsWith('blob:'+origin+'/'))?r.continue():r.abort());
+ await page.goto(origin+'/tests/ui/fixture.html?screen=googlecalendar');
+ await page.getByLabel('Google-Kalender-ID',{exact:true}).fill('dispo@example.org');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+ await page.getByRole('button',{name:'Kalender verbinden'}).click();
+ await page.getByText('Verbunden',{exact:true}).waitFor();
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByRole('button',{name:'Verbindung trennen'}).click();
+ await page.getByLabel('Google-Kalender-ID',{exact:true}).waitFor();
  for(const screen of['client','invoices','receipts','billing','dispatch']){
  await page.goto(`${origin}/tests/ui/fixture.html?screen=${screen}`);
  await page.locator(screen==='client'?'.client-editor':screen==='invoices'?'.finance-row:not(.finance-head)':screen==='receipts'?'.receipt-row:not(.finance-head)':screen==='billing'?'.billing-row:not(.billing-head)':'.trip-row').waitFor();
