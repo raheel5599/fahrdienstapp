@@ -1,7 +1,7 @@
 import RecentDestinationSelect from './RecentDestinationSelect.jsx';
 import PlacesAddressInput from './PlacesAddressInput.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
-import {ShieldCheck,X} from 'lucide-react';
+import {ArrowDownUp,ShieldCheck,X} from 'lucide-react';
 import {isTaxiTrip, medicalBrand, taxiBrand} from '../../supabase/functions/_shared/rideCategories.js';
 import {RideTypeOptions} from './RideTypeOptions.jsx';
 import {APP_CONFIG} from '../config/app.js';
@@ -88,6 +88,16 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
     setForm(v=>({...v,destinationId:id,toAddress:dest?.address||'',tripType:!isTaxiTrip(v.tripType)&&dest?.destination_type==='dialysis'?'Dialyse':v.tripType}));
   }
 
+  function reverseRoute(){
+    setForm(current=>({
+      ...current,
+      fromAddress:current.toAddress,
+      toAddress:current.fromAddress,
+      direction:current.direction==='return'?'outbound':'return',
+      destinationId:''
+    }));
+  }
+
   async function submit(e){
     e.preventDefault();
     setSaving(true);setError('');
@@ -146,6 +156,12 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
         <RecentDestinationSelect customer={customer} address={form.toAddress} destinationId={form.destinationId} direction={form.direction} disabled={Boolean(trip)}
           onSavedTarget={chooseDestination} onRecentTarget={address=>setForm(current=>({...current,destinationId:'',toAddress:address}))}/>
         <PlacesAddressInput label="Abholadresse" value={form.fromAddress} onChange={value=>set('fromAddress',value)} required disabled={Boolean(trip)}/>
+        {!trip&&<div className="route-swap-row">
+          <button className="text-button route-swap-button" type="button"
+            disabled={!form.fromAddress.trim()||!form.toAddress.trim()||saving} onClick={reverseRoute}>
+            <ArrowDownUp size={17} aria-hidden="true"/> Adressen tauschen
+          </button>
+        </div>}
         <PlacesAddressInput label="Zieladresse" value={form.toAddress} onChange={value=>setForm(current=>({...current,toAddress:value,destinationId:''}))} required disabled={Boolean(trip)}/>
       </div>
 

@@ -563,3 +563,6 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .places-dropdown li span,.places-field>small{color:var(--muted);font-size:13px}
 .places-dropdown small{display:block;padding:5px 12px;text-align:right;border-top:1px solid var(--line)}
 .recent-destination-select select{box-sizing:border-box;max-width:100%;text-overflow:ellipsis}
+.route-swap-row{grid-column:1/-1;display:flex;justify-content:flex-end}
+.route-swap-button{display:inline-flex;align-items:center;gap:7px;min-height:36px;color:var(--ink)}
+.route-swap-button:disabled{opacity:.5;cursor:default}
