@@ -228,7 +228,7 @@ function App() {
               {active==='dashboard'&&<p className="mobile-page-date">{todayLabel}</p>}
             </div>
             <div className="heading-actions">
-              {can(PERMISSIONS.TRIPS_MANAGE) && <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>}
+              {['dashboard','disposition'].includes(active) && can(PERMISSIONS.TRIPS_MANAGE) && <button className="primary-button" onClick={() => setDispatchOpen(true)}><Plus size={18}/> Neue Fahrt</button>}
             </div>
           </div>
 
@@ -273,6 +273,7 @@ function App() {
             <LiveDispatchBoard
               data={dispatchData}
               summaryOnly
+              vehicles={fleet.vehicles}
               onOpenDispatch={() => navigate('disposition')}
             />
           ) : (

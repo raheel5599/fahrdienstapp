@@ -505,3 +505,43 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .driver-brand{color:inherit;font-size:1.05rem;font-weight:800}
 .dispatch-tabs{flex-wrap:wrap}
 @media(max-width:380px){.dispatch-tabs button{padding-inline:8px}}
+
+.central-section{padding:18px;margin-block:14px;min-width:0}
+.central-section-heading,.central-list-heading{flex-wrap:wrap;align-items:center;gap:12px}
+.central-list-heading{display:flex;justify-content:space-between;margin-bottom:10px}
+.central-list-heading h2,.central-list-heading h3,.central-section>h2:first-child{margin:0;font-size:18px}
+.central-overview,.central-inbox{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px}
+.central-overview .central-section{margin:0}
+.central-preview-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
+.central-preview-row:last-child{border:0}
+.central-preview-row>span:first-child,.central-empty{color:var(--muted)}
+.central-filters{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px;margin:14px 0;align-items:end}
+.central-filters input,.central-filters select,.central-inbox select{box-sizing:border-box;width:100%;min-width:0;height:44px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ink);font:inherit;text-align:left}
+.central-filters input::-webkit-date-and-time-value{text-align:left;margin:0}
+.central-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(135px,100%),1fr));gap:10px;margin-block:14px}
+.central-kpis>span{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--muted);font-size:13px}
+.central-kpis b{font-size:19px;color:var(--ink);font-variant-numeric:tabular-nums}
+.central-tabs{width:fit-content;max-width:100%;flex-wrap:wrap;margin-bottom:18px}
+.central-tabs button.active{background:var(--gold);color:#171409}
+.central-settings .business-settings fieldset{background:var(--panel);margin:12px 0}
+.central-settings .business-settings textarea{font:inherit;font-weight:400;padding:10px}
+.reminder-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;color:inherit;text-align:left;padding:5px 0;font:inherit;cursor:pointer}
+.reminder-toggle span{color:var(--muted);white-space:nowrap;font-size:13px}
+.reminder-settings .form-grid{margin-top:12px}
+.central-settings [hidden]{display:none!important}
+.central-inbox{grid-template-columns:minmax(180px,1fr) minmax(0,2fr)}
+.central-inbox aside{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft)}
+.central-inbox label{display:grid;gap:6px}
+.central-chat{min-width:0}
+.central-chat>.central-empty{display:grid;place-items:center;min-height:120px;margin:0;border:1px solid var(--line);border-radius:10px}
+@media(max-width:690px){.central-overview,.central-inbox{grid-template-columns:1fr}.central-section{padding:14px}}
+@media(max-width:560px){.central-filters{grid-template-columns:1fr}}
+.calendar-colors{display:flex;flex-wrap:wrap;gap:12px 24px}
+.calendar-colors span{display:flex;align-items:center;gap:8px}
+.calendar-colors i{width:13px;height:13px;border-radius:4px}
+.calendar-taxi{background:#e6b845}.calendar-medical{background:#527ad4}
+.central-note{margin:10px 0;color:var(--muted);font-size:14px}
+.central-note summary{cursor:pointer;width:fit-content}
+.central-note p{margin:8px 0}
+.central-filters input[type=month]{appearance:none;line-height:normal}
+.central-filters input[type=month]::-webkit-datetime-edit{padding:0;text-align:left}

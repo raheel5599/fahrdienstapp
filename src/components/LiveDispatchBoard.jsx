@@ -25,6 +25,11 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,su
     open:todayTrips.filter(t=>t.status===TRIP_STATUS.OPEN).length
   }),[todayTrips]);
 
+  const upcoming=summaryOnly
+    ? data.trips.filter(trip=>trip.date>=today&&[TRIP_STATUS.OPEN,TRIP_STATUS.PLANNED].includes(trip.status))
+      .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,5)
+    : [];
+
   return <>
     <div className="metrics">
       <Metric icon={CalendarDays} label="Heute geplant" value={metrics.today} note="Fahrten gesamt"/>
@@ -35,7 +40,17 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,su
 
     {data.error&&<div className="users-error">{data.error}</div>}
 
-    {summaryOnly ? <button className="secondary-button" onClick={onOpenDispatch}><Route size={17}/> Disposition öffnen</button> : <>
+    {summaryOnly ? <div className="central-overview">
+      <section className="panel central-section">
+        <div className="central-list-heading"><h2>Offene & geplante Fahrten</h2><button className="secondary-button" onClick={onOpenDispatch}>Disposition öffnen</button></div>
+        {upcoming.map(trip=><div className="central-preview-row" key={trip.id}><span>{trip.date===today?'Heute':trip.date.split('-').reverse().join('.')} · {trip.time}</span><strong>{trip.type}</strong><StatusPill status={trip.status}/></div>)}
+        {!data.loading&&!upcoming.length&&<p className="central-empty">Keine weiteren Fahrten geplant.</p>}
+      </section>
+      <section className="panel central-section"><h2>Fahrzeugstatus</h2>
+        {vehicles?.slice(0,5).map(vehicle=><div className="central-preview-row" key={vehicle.id}><Car size={17}/><strong>{vehicle.registration}</strong><span>{vehicle.status}</span></div>)}
+        {!vehicles?.length&&<p className="central-empty">Keine Fahrzeuge angelegt.</p>}
+      </section>
+    </div> : <>
     {isRemoteBackendConfigured&&<TaxiLiveOffice/>}
     <div className="dashboard-grid">
       <section className="panel trips-panel">
