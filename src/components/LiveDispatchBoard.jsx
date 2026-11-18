@@ -2,7 +2,7 @@ import {isTaxiTrip,medicalBrand,taxiBrand} from '../../supabase/functions/_share
 import TaxiLiveOffice from './TaxiLiveOffice.jsx';
 import {isRemoteBackendConfigured} from '../config/backend.js';
 import React,{useMemo,useState} from 'react';
-import {CalendarDays,Car,CheckCircle2,Clock3,Gauge,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
+import {CalendarDays,Car,CheckCircle2,Clock3,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
 import {STATUS_LABELS,TRIP_STATUS} from '../domain/trips.js';
 
 function localDate(){
@@ -11,7 +11,7 @@ function localDate(){
 }
 function StatusPill({status}){return <span className={'status-pill status-'+status}><span className="dot"/>{STATUS_LABELS[status]||status}</span>;}
 
-export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
+export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,summaryOnly=false,onOpenDispatch}){
   const [business,setBusiness]=useState('all');
   const today=localDate();
   const [date,setDate]=useState(today);
@@ -35,6 +35,7 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
 
     {data.error&&<div className="users-error">{data.error}</div>}
 
+    {summaryOnly ? <button className="secondary-button" onClick={onOpenDispatch}><Route size={17}/> Disposition öffnen</button> : <>
     {isRemoteBackendConfigured&&<TaxiLiveOffice/>}
     <div className="dashboard-grid">
       <section className="panel trips-panel">
@@ -76,14 +77,8 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
         </div>
       </section>
 
-      <section className="panel quick-panel">
-        <PanelTitle icon={Gauge} title="Schnellaktionen"/>
-        <div className="quick-grid">
-          <button className="quick-action" onClick={()=>onNew(date)}><Plus size={20}/><span>Neue Fahrt</span></button>
-          <button className="quick-action" onClick={()=>onNew(date)}><Route size={20}/><span>Offene Fahrt zuweisen</span></button>
-        </div>
-      </section>
     </div>
+    </>}
   </>;
 }
 

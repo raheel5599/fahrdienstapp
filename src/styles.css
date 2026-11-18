@@ -481,3 +481,18 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .calendar-settings-body input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
 .calendar-settings-body .users-error{color:var(--red)}
 @media(max-width:600px){.calendar-settings-body .primary-button,.calendar-settings-body .secondary-button{width:100%}}
+
+.sidebar nav .nav-section{padding:12px 12px 4px;color:#a9adb7;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.sidebar .central-wordmark{font-size:1.12rem;font-weight:800;line-height:1.2;color:#fff}
+.dispatch-radio{margin-bottom:16px}
+.dispatch-radio .text-button{display:inline-flex;align-items:center;gap:7px}
+.dispatch-radio-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end;gap:12px;padding:16px}
+.dispatch-radio-body label{display:grid;gap:6px;color:var(--muted);font-size:.84rem}
+.dispatch-radio-body select{width:100%;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
+.dispatch-radio-body p{grid-column:1/-1;margin:0;color:var(--muted)}
+.dispatch-radio-body .users-error{color:var(--red)}
+.dispatch-radio-talk,.dispatch-radio-live{touch-action:none;user-select:none;-webkit-touch-callout:none}
+.dispatch-radio-live{box-shadow:inset 0 0 0 2px currentColor}
+@media(max-width:550px){.dispatch-radio-body{grid-template-columns:1fr}}
+.central-login-wordmark{display:block;color:#d9a036;margin-bottom:8px;font-size:1.65rem;font-weight:800;letter-spacing:-.025em}
+.driver-brand{color:inherit;font-size:1.05rem;font-weight:800}

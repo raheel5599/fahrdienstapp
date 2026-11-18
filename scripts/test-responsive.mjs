@@ -109,14 +109,14 @@ try{
  if(width<=800){
   await mobileTabs.getByRole('button',{name:'Start',exact:true}).waitFor();
   assert.equal(await mobileTabs.isVisible(),true);await page.screenshot({path:`test-results/${name}-${size}-mobile-app-start.png`});
-  for(const[label,title]of [['Fahrten','Fahrten / Disposition'],['Kunden','Kundenverwaltung'],['Termine','Terminverwaltung']]){
+  for(const[label,title]of [['Fahrten','Disposition'],['Kunden','Kunden'],['Funk','Funk & Nachrichten']]){
    await mobileTabs.getByRole('button',{name:label,exact:true}).click();
    assert.equal(await page.locator('.page-heading h1').innerText(),title);
    assert.equal(await mobileTabs.getByRole('button',{name:label,exact:true}).getAttribute('aria-current'),'page');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${name}/${size}: mobile ${label} width`);
   }
   await mobileTabs.getByRole('button',{name:'Start',exact:true}).click();await page.getByRole('heading',{name:'Hallo Testbüro',exact:true}).waitFor();
-  await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).click();await page.getByRole('navigation',{name:'Hauptmenü'}).getByRole('button',{name:'Nachrichten',exact:true}).click();
+  await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).click();await page.getByRole('navigation',{name:'Hauptmenü'}).getByRole('button',{name:'Einstellungen',exact:true}).click();
   assert.equal(await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).getAttribute('aria-current'),'page');
   await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).click();await page.keyboard.press('Escape');
   assert.equal(await mobileTabs.getByRole('button',{name:'Weitere Bereiche',exact:true}).getAttribute('aria-expanded'),'false');

@@ -1,3 +1,4 @@
+import DispatchRadio from './DispatchRadio.jsx';
 import TaxiLiveRide from './TaxiLiveRide.jsx';
 import DriverOfflinePanel from './DriverOfflinePanel.jsx';
 import {useDriverOffline} from '../hooks/useDriverOffline.js';
@@ -141,7 +142,7 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
 
   return <div className="driver-app">
     <header className="driver-topbar">
-      <img src={APP_CONFIG.logoUrl} alt={APP_CONFIG.name}/>
+      <strong className="driver-brand">{APP_CONFIG.name}</strong>
       <div className="driver-online"><span className="online-dot"/> {shiftState.shift?shiftState.shift.state==='paused'?'Pause':taxiActive?'Schicht · Einsteigerstatus prüfen / besetzt':active?'Schicht · im Einsatz':'Schicht · verfügbar':'Keine Schicht'}</div>
       <div className="driver-select">
         <div className="driver-identity"><strong>{user.name}</strong><span>Fahrer</span></div>
@@ -150,6 +151,7 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
     </header>
 
     <main className="driver-content">
+      <DispatchRadio user={user}/>
       <DriverShiftPanel api={offline.api} onState={setShiftState} changeBlocked={taxiBlocked||(offline.enabled&&(!offline.online||offline.queue.length>0))}/>
       {offline.enabled&&<DriverOfflinePanel offline={offline} blocked={offlineBlocked}/>}
       <button className="secondary-button" aria-expanded={messagesOpen} onClick={()=>setMessagesOpen(v=>!v)}>{messagesOpen?'Nachrichten schließen':'Nachrichten mit dem Büro'}</button>
