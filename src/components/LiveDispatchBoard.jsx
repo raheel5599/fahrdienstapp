@@ -2,7 +2,7 @@ import {isTaxiTrip,medicalBrand,taxiBrand} from '../../supabase/functions/_share
 import TaxiLiveOffice from './TaxiLiveOffice.jsx';
 import {isRemoteBackendConfigured} from '../config/backend.js';
 import React,{useMemo,useState} from 'react';
-import {CalendarDays,Car,CheckCircle2,Clock3,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
+import {CalendarDays,Car,ChevronDown,CheckCircle2,Clock3,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
 import {STATUS_LABELS,TRIP_STATUS} from '../domain/trips.js';
 
 function localDate(){
@@ -40,8 +40,27 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,su
     <div className="dashboard-grid">
       <section className="panel trips-panel">
         <PanelTitle icon={Route} title={date===today?"Heute – Live-Disposition":"Terminübersicht"} right={<button className="text-button" onClick={()=>onNew(date)}><Plus size={15}/> Neue Fahrt</button>}/>
-        <div className="form-grid dispatch-filters"><label><span>Datum</span> <input type="date" value={date} onChange={event=>setDate(event.target.value||today)}/></label>
-        <label><span>Bereich</span><select aria-label="Bereich" value={business} onChange={event=>setBusiness(event.target.value)}><option value="all">Alle Fahrten</option><option value="taxi">{taxiBrand}</option><option value="medical">{medicalBrand}</option></select></label></div>
+        <div className="dispatch-filters">
+          <label>
+            <span>Datum</span>
+            <span className="dispatch-filter-control">
+              <span aria-hidden="true">{date.split('-').reverse().join('.')}</span>
+              <CalendarDays size={17} aria-hidden="true"/>
+              <input type="date" value={date} onChange={event=>setDate(event.target.value||today)}/>
+            </span>
+          </label>
+          <label>
+            <span>Bereich</span>
+            <span className="dispatch-filter-control">
+              <select value={business} onChange={event=>setBusiness(event.target.value)}>
+                <option value="all">Alle Fahrten</option>
+                <option value="taxi">{taxiBrand}</option>
+                <option value="medical">{medicalBrand}</option>
+              </select>
+              <ChevronDown size={17} aria-hidden="true"/>
+            </span>
+          </label>
+        </div>
         <div className="trip-list">
           {data.loading?<div className="users-loading">Fahrten werden geladen …</div>:dateTrips.length===0?
             <div className="dispatch-empty"><CalendarDays/><h3>An diesem Datum sind keine Fahrten geplant</h3><p>Einzelfahrt anlegen oder eine Serienfahrt planen.</p><button className="primary-button" onClick={()=>onNew(date)}><Plus size={17}/> Fahrt anlegen</button></div>:

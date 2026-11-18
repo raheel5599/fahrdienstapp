@@ -464,8 +464,15 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .contract-billing-note{grid-column:1/-1;min-width:0}.contract-billing-note .contract-position-catalog{max-width:100%}.contract-billing-note .contract-position-list>div{align-items:flex-start}
 .taxi-live-card,.taxi-office-live{margin-bottom:14px;min-width:0}
 .taxi-live-card,.taxi-office-list,.taxi-empty,.taxi-office-live>.taxi-live-error{padding:16px}
-.dispatch-filters{padding:12px 16px;border-bottom:1px solid var(--line)}
-.dispatch-filters select,.dispatch-filters input{border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ink);padding:9px}
+.dispatch-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dispatch-filters label{display:grid;min-width:0;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}
+.dispatch-filter-control{position:relative;display:flex;align-items:center;justify-content:space-between;min-width:0;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ink);font-size:16px;font-weight:400}
+.dispatch-filter-control:focus-within{outline:2px solid var(--gold);outline-offset:2px}
+.dispatch-filter-control svg{position:absolute;right:12px;pointer-events:none;color:var(--muted)}
+.dispatch-filter-control input,.dispatch-filter-control select{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;min-width:0;margin:0;cursor:pointer}
+.dispatch-filter-control input{opacity:0}
+.dispatch-filter-control input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:auto;height:auto;margin:0;cursor:pointer}
+.dispatch-filter-control select{appearance:none;padding:0 36px 0 12px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-overflow:ellipsis;outline:none}
 .taxi-live-title,.taxi-live-actions,.destination-choice{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .taxi-live-title{justify-content:space-between}.taxi-live-title small,.taxi-live-card>small{color:var(--muted)}
 .taxi-live-card p{line-height:1.5}.taxi-live-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;background:var(--gold)}.taxi-live-dot.free{background:var(--green)}
