@@ -496,3 +496,5 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 @media(max-width:550px){.dispatch-radio-body{grid-template-columns:1fr}}
 .central-login-wordmark{display:block;color:#d9a036;margin-bottom:8px;font-size:1.65rem;font-weight:800;letter-spacing:-.025em}
 .driver-brand{color:inherit;font-size:1.05rem;font-weight:800}
+.dispatch-tabs{flex-wrap:wrap}
+@media(max-width:380px){.dispatch-tabs button{padding-inline:8px}}

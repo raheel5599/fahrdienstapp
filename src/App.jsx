@@ -8,7 +8,7 @@ import DocumentManagement from './components/DocumentManagement.jsx';
 import BusinessSettings from './components/BusinessSettings.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, BadgeEuro, Bell, BookOpenCheck, Building2, CalendarDays, Car,
+  Activity, BadgeEuro, Bell, BookOpenCheck, Building2, Car,
   ChartNoAxesCombined, CheckCircle2, ChevronDown, CircleUserRound, Clock3,
   FileCheck2, FileText, Gauge, Home, Landmark, MapPinned,
   Menu, MoreHorizontal, MessageSquareText, Plus, ReceiptText, Route, Search, Settings,
@@ -259,7 +259,7 @@ function App() {
             <div><div className="module-tabs finance-tabs" aria-label="Berichtsart"><button className={reportTab==='finance'?'active':''} onClick={()=>setReportTab('finance')}>Rechnungen & Kostenträger</button><button className={reportTab==='shifts'?'active':''} onClick={()=>setReportTab('shifts')}>Schichten & Kilometer</button><button className={reportTab==='utilization'?'active':''} onClick={()=>setReportTab('utilization')}>Fahrer & Fahrzeuge</button></div>{reportTab==='finance'?<FinanceReports data={financeData}/>:reportTab==='shifts'?<ShiftReports drivers={drivers}/>:<UtilizationReports/>}</div>
           ) : active === 'disposition' ? (
             <div>
-              <div className="module-tabs finance-tabs" aria-label="Fahrtenansicht">
+              <div className="module-tabs finance-tabs dispatch-tabs" aria-label="Fahrtenansicht">
                 <button className={dispatchTab==='live'?'active':''} onClick={()=>setDispatchTab('live')}>Live-Disposition</button>
                 {can(PERMISSIONS.SCHEDULE_MANAGE)&&<button className={dispatchTab==='series'?'active':''} onClick={()=>setDispatchTab('series')}>Serienfahrten</button>}
                 <button className={dispatchTab==='history'?'active':''} onClick={()=>setDispatchTab('history')}>Fahrtenhistorie</button>
