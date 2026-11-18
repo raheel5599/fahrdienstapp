@@ -34,4 +34,3 @@ $$;
 revoke all on function private.fill_trip_series(uuid,boolean,date) from public,anon,authenticated;
 grant usage on schema private to service_role;
 grant execute on function private.fill_trip_series(uuid,boolean,date) to service_role;
-

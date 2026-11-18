@@ -131,7 +131,7 @@ function SeriesEditor({item,clients,onClose,onSaved,onError}){
       <div className="form-grid">
         <label><span>Kunde</span><select value={form.customerId} onChange={e=>chooseCustomer(e.target.value)} required><option value="">Kunde auswählen</option>{clients.map(c=><option key={c.id} value={c.id}>{c.fullName}{c.isRegular?' · Stammkunde':''}</option>)}</select></label>
         <label><span>Name der Serie</span><input value={form.name} onChange={e=>set('name',e.target.value)} placeholder="z. B. Dialyse Mo/Mi/Fr" required/></label>
-        <label><span>Fahrtart</span><select value={form.tripType} onChange={e=>set('tripType',e.target.value)}><RideTypeOptions current={form.tripType}/></select></label>
+        <label><span>Fahrtart</span><select aria-label="Fahrtart" value={form.tripType} onChange={e=>set('tripType',e.target.value)}><RideTypeOptions current={form.tripType}/></select></label>
         <label><span>Häufiges Ziel</span><select value={form.destinationId} onChange={e=>chooseDestination(e.target.value)}><option value="">Manuell eingeben</option>{(customer?.destinations||[]).map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
         <label className="wide"><span>Abholadresse</span><input value={form.originAddress} onChange={e=>set('originAddress',e.target.value)} required/></label>
         <label className="wide"><span>Zieladresse</span><input value={form.destinationAddress} onChange={e=>set('destinationAddress',e.target.value)} required/></label>
