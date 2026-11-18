@@ -1,6 +1,6 @@
 # Google Kalender für die Disposition
 
-Die App überträgt Einzeltermine und erzeugte Serienfahrten einseitig. Google erhält nur eine gekürzte Auftragsnummer, Beginn und eine technische Endzeit. Die Google-Anzeige verwendet Europe/Berlin. Die App übermittelt weder Namen noch Adressen, Diagnosen oder Notizen.
+Die App überträgt Einzeltermine und erzeugte Serienfahrten einseitig. Google erhält eine gekürzte Auftragsnummer, Beginn und eine technische Endzeit. In der Terminbeschreibung stehen Name, Abholadresse und Zieladresse. Taxi-, Kurier- und Flughafenfahrten erscheinen gelb, Krankenfahrten blau. Die Google-Anzeige verwendet Europe/Berlin. Diagnosen und interne Notizen bleiben in der Fahrdienst-App. Nutze einen internen Kalender, auf den nur berechtigte Mitarbeitende Zugriff haben.
 
 ## Einmalige Einrichtung
 

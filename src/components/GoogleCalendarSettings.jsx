@@ -44,7 +44,7 @@ export default function GoogleCalendarSettings({api=calendarRequest}){
         <div className="form-grid"><label className="wide"><span>Google-Kalender-ID</span>
           <input required value={calendarId} disabled={busy} onChange={event=>setCalendarId(event.target.value)} placeholder="Kalender-ID aus „Kalender integrieren“"/>
         </label></div>
-        <p>Einzel- und Serienfahrten ab heute erscheinen mit Uhrzeit und Auftragsnummer. Änderungen und Stornierungen werden automatisch übertragen.</p>
+        <p>Taxi-Aufträge erscheinen gelb, Krankenfahrten blau. In der Terminbeschreibung stehen Name, Abholadresse und Zieladresse. Verbinde dafür einen Kalender mit Zugriff nur für berechtigte Mitarbeitende.</p>
         <button type="submit" className="primary-button" disabled={busy||!calendarId.trim()}><Link2 size={17}/>{busy?'Verbindung wird geprüft …':'Kalender verbinden'}</button>
       </form>:status&&<p>Für die Verbindung muss das Google-Dienstkonto auf dem Server eingerichtet werden.</p>}
     </div>

@@ -38,8 +38,8 @@ declare t public.trips%rowtype;
 begin
  if tg_op='DELETE' then t:=old; else t:=new; end if;
  if not exists(select from public.google_calendar_links where business_unit_id=t.business_unit_id) then return null; end if;
- if tg_op='UPDATE' and (old.service_date,old.scheduled_time,old.trip_type,old.status in ('storniert','no_show'))
-   is not distinct from (new.service_date,new.scheduled_time,new.trip_type,new.status in ('storniert','no_show')) then return null; end if;
+ if tg_op='UPDATE' and (old.service_date,old.scheduled_time,old.trip_type,old.customer_name,old.from_address,old.to_address,old.status in ('storniert','no_show'))
+   is not distinct from (new.service_date,new.scheduled_time,new.trip_type,new.customer_name,new.from_address,new.to_address,new.status in ('storniert','no_show')) then return null; end if;
  insert into public.google_calendar_queue as q(business_unit_id,trip_id,service_date,scheduled_time,trip_type,removed)
  values(t.business_unit_id,t.id,t.service_date,t.scheduled_time,t.trip_type,tg_op='DELETE' or t.status in ('storniert','no_show'))
  on conflict(business_unit_id,trip_id) do update set service_date=excluded.service_date,scheduled_time=excluded.scheduled_time,
@@ -80,8 +80,10 @@ create function public.calendar_claim() returns setof jsonb language sql set sea
  update public.google_calendar_queue q set lease=gen_random_uuid(),lease_until=now()+interval '3 minutes'
  from batch b where (q.business_unit_id,q.trip_id)=(b.business_unit_id,b.trip_id) returning q.*)
  select to_jsonb(c)||jsonb_build_object('calendar_id',l.calendar_id,'start_at',
- (c.service_date+c.scheduled_time) at time zone 'Europe/Berlin')
+ (c.service_date+c.scheduled_time) at time zone 'Europe/Berlin',
+ 'customer_name',t.customer_name,'from_address',t.from_address,'to_address',t.to_address)
  from claimed c join public.google_calendar_links l using(business_unit_id)
+ left join public.trips t on t.id=c.trip_id and t.business_unit_id=c.business_unit_id and not c.removed
 $$;
 
 create function public.calendar_finish(p_unit uuid,p_trip uuid,p_lease uuid,p_revision bigint,p_error text)

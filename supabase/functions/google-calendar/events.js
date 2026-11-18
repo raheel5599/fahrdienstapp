@@ -1,8 +1,21 @@
+import {isTaxiTrip} from '../_shared/rideCategories.js';
+
 const eventsUrl = 'https://www.googleapis.com/calendar/v3/calendars/';
+
+const escapeHtml = value => String(value ?? '').trim()
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 export function eventPayload(job) {
   const start = new Date(job.start_at);
+  const taxi = isTaxiTrip(job.trip_type);
+  const description = [
+    [taxi ? 'Fahrgast' : 'Patient/in', job.customer_name],
+    ['Abholung', job.from_address],
+    ['Ziel', job.to_address]
+  ].map(([label, value]) => `${label}: ${escapeHtml(value) || '–'}`).join('<br>');
   return {
+    colorId: taxi ? '5' : '9',
+    description,
     summary: 'Fahrt · ' + job.trip_id.slice(0, 8).toUpperCase(),
     start: {dateTime: start.toISOString(), timeZone: 'Europe/Berlin'},
     // Dispatch supplies a scheduled departure, not an agreed end time.
