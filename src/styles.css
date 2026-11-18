@@ -545,3 +545,7 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .central-note p{margin:8px 0}
 .central-filters input[type=month]{appearance:none;line-height:normal}
 .central-filters input[type=month]::-webkit-datetime-edit{padding:0;text-align:left}
+.central-settings .business-settings textarea{border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ink)}
+.reminder-settings .business-settings{max-width:none}
+.reminder-settings form>.primary-button{display:flex;width:fit-content;margin-left:auto}
+.central-section-heading>div:first-child,.reminder-settings .batch-heading>div:first-child{flex:1 1 320px;min-width:0}
