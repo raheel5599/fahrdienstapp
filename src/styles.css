@@ -549,3 +549,7 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .reminder-settings .business-settings{max-width:none}
 .reminder-settings form>.primary-button{display:flex;width:fit-content;margin-left:auto}
 .central-section-heading>div:first-child,.reminder-settings .batch-heading>div:first-child{flex:1 1 320px;min-width:0}
+
+.sidebar-brand .central-sidebar-logo{display:block;width:min(100%,190px);min-width:0;height:auto;max-height:64px;border-radius:6px}
+.central-header-logo{display:block;width:clamp(120px,22vw,174px);height:auto;max-height:56px;object-fit:contain;border-radius:6px}
+@media(max-width:380px){.central-header-logo{width:104px}}

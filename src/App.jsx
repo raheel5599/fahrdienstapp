@@ -181,7 +181,7 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${mobileNav ? 'open' : ''}`}>
         <div className="sidebar-brand">
-          <span className="central-wordmark">{APP_CONFIG.name}</span>
+          <img className="central-sidebar-logo" src="/tariq-zentrale-logo.jpeg" alt={APP_CONFIG.name}/>
           <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Menü schließen"><X /></button>
         </div>
         <nav aria-label="Hauptmenü">
@@ -208,7 +208,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="icon-button menu-button" aria-label="Menü öffnen" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu /><span className="mobile-menu-label">Menü</span></button>
-            <div className="topbar-brand"><span className="desktop-brand">TARIQ · Zentrale</span><span className="mobile-brand">TARIQ Zentrale</span></div>
+            <div className="topbar-brand"><img className="central-header-logo" src="/tariq-zentrale-logo.jpeg" alt={APP_CONFIG.name}/></div>
           </div>
           <div className="topbar-actions">
 
