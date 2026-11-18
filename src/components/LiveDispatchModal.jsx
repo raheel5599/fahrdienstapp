@@ -1,3 +1,4 @@
+import PlacesAddressInput from './PlacesAddressInput.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {ShieldCheck,X} from 'lucide-react';
 import {isTaxiTrip, medicalBrand, taxiBrand} from '../../supabase/functions/_shared/rideCategories.js';
@@ -142,8 +143,8 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
         {taxiTrip&&<p className="billing-review-note wide">Diese Fahrt wird privat abgerechnet.</p>}
         {(taxiTrip||form.billingPayerType==='private')&&<><label><span>Privatpreis € je Fahrtrichtung</span><input type="number" min="0.01" step="0.01" value={form.privatePrice} onChange={e=>set('privatePrice',e.target.value)} disabled={Boolean(trip)} placeholder="Optional, später prüfen"/></label><label><span>MwSt. Privatfahrt</span><select value={form.privateVatRate} onChange={e=>set('privateVatRate',e.target.value)} disabled={Boolean(trip)}><option value="0">0 %</option><option value="7">7 %</option><option value="19">19 %</option></select></label></>}
         <label><span>Häufiges Ziel</span><select value={form.destinationId} onChange={e=>chooseDestination(e.target.value)} disabled={Boolean(trip)}><option value="">Manuell</option>{(customer?.destinations||[]).map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
-        <label className="wide"><span>Abholadresse</span><input value={form.fromAddress} onChange={e=>set('fromAddress',e.target.value)} required disabled={Boolean(trip)}/></label>
-        <label className="wide"><span>Zieladresse</span><input value={form.toAddress} onChange={e=>set('toAddress',e.target.value)} required disabled={Boolean(trip)}/></label>
+        <PlacesAddressInput label="Abholadresse" value={form.fromAddress} onChange={value=>set('fromAddress',value)} required disabled={Boolean(trip)}/>
+        <PlacesAddressInput label="Zieladresse" value={form.toAddress} onChange={value=>set('toAddress',value)} required disabled={Boolean(trip)}/>
       </div>
 
       <div className="form-section-title">Zuweisung</div>

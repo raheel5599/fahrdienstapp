@@ -553,3 +553,12 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .sidebar-brand .central-sidebar-logo{display:block;width:min(100%,190px);min-width:0;height:auto;max-height:64px;border-radius:6px}
 .central-header-logo{display:block;width:clamp(120px,22vw,174px);height:auto;max-height:56px;object-fit:contain;border-radius:6px}
 @media(max-width:380px){.central-header-logo{width:104px}}
+
+.places-field{grid-column:1/-1;position:relative;display:grid;gap:6px;min-width:0}
+.places-field>label{display:block}
+.places-dropdown{position:absolute;z-index:8;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 24px #171a2424}
+.places-dropdown ul{list-style:none;padding:0;margin:0;max-height:205px;overflow:auto;overscroll-behavior:contain}
+.places-dropdown li{display:grid;gap:3px;padding:9px 12px;cursor:pointer}
+.places-dropdown li:hover,.places-dropdown li[aria-selected=true]{background:var(--panel-soft)}
+.places-dropdown li span,.places-field>small{color:var(--muted);font-size:13px}
+.places-dropdown small{display:block;padding:5px 12px;text-align:right;border-top:1px solid var(--line)}
