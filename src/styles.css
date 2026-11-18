@@ -562,3 +562,4 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .places-dropdown li:hover,.places-dropdown li[aria-selected=true]{background:var(--panel-soft)}
 .places-dropdown li span,.places-field>small{color:var(--muted);font-size:13px}
 .places-dropdown small{display:block;padding:5px 12px;text-align:right;border-top:1px solid var(--line)}
+.recent-destination-select select{box-sizing:border-box;max-width:100%;text-overflow:ellipsis}

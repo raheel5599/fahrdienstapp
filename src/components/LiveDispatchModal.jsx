@@ -1,3 +1,4 @@
+import RecentDestinationSelect from './RecentDestinationSelect.jsx';
 import PlacesAddressInput from './PlacesAddressInput.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {ShieldCheck,X} from 'lucide-react';
@@ -142,9 +143,10 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
         {!taxiTrip&&<label><span>Abrechnung</span><select aria-label="Abrechnung" value={form.billingPayerType} onChange={e=>set('billingPayerType',e.target.value)} disabled={Boolean(trip)}><option value="auto">Nach hinterlegter Krankenversicherung</option><option value="insurer">Krankenkasse</option><option value="private">Privatfahrt</option></select></label>}
         {taxiTrip&&<p className="billing-review-note wide">Diese Fahrt wird privat abgerechnet.</p>}
         {(taxiTrip||form.billingPayerType==='private')&&<><label><span>Privatpreis € je Fahrtrichtung</span><input type="number" min="0.01" step="0.01" value={form.privatePrice} onChange={e=>set('privatePrice',e.target.value)} disabled={Boolean(trip)} placeholder="Optional, später prüfen"/></label><label><span>MwSt. Privatfahrt</span><select value={form.privateVatRate} onChange={e=>set('privateVatRate',e.target.value)} disabled={Boolean(trip)}><option value="0">0 %</option><option value="7">7 %</option><option value="19">19 %</option></select></label></>}
-        <label><span>Häufiges Ziel</span><select value={form.destinationId} onChange={e=>chooseDestination(e.target.value)} disabled={Boolean(trip)}><option value="">Manuell</option>{(customer?.destinations||[]).map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
+        <RecentDestinationSelect customer={customer} address={form.toAddress} destinationId={form.destinationId} direction={form.direction} disabled={Boolean(trip)}
+          onSavedTarget={chooseDestination} onRecentTarget={address=>setForm(current=>({...current,destinationId:'',toAddress:address}))}/>
         <PlacesAddressInput label="Abholadresse" value={form.fromAddress} onChange={value=>set('fromAddress',value)} required disabled={Boolean(trip)}/>
-        <PlacesAddressInput label="Zieladresse" value={form.toAddress} onChange={value=>set('toAddress',value)} required disabled={Boolean(trip)}/>
+        <PlacesAddressInput label="Zieladresse" value={form.toAddress} onChange={value=>setForm(current=>({...current,toAddress:value,destinationId:''}))} required disabled={Boolean(trip)}/>
       </div>
 
       <div className="form-section-title">Zuweisung</div>
