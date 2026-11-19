@@ -1,6 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.117.2';
 import {syncEvent,verifyCalendar} from './events.js';
 
+import {authorize,exchange,writable,open,seal,tokens} from './oauth.ts';
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply = (status:number, body:unknown) => Response.json(body,{status,headers:cors});
 const encode = (data:Uint8Array) => btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
@@ -43,10 +44,20 @@ Deno.serve(async req=>{
       const jobs=await db.rpc('calendar_claim');
       if(jobs.error)throw Error('Auftragsliste nicht verfügbar.');
       if(!jobs.data.length)return reply(200,{processed:0});
-      const token=accessToken();
+      const byUnit=new Map<string,Promise<string>>();
+      async function workerToken(unit:string){
+        const link=await db.from('google_calendar_links').select('oauth_ciphertext').eq('business_unit_id',unit).single();
+        if(link.error)throw Error('Kalenderverbindung fehlt.');
+        if(!link.data.oauth_ciphertext)return accessToken();
+        const refresh_token=await open(link.data.oauth_ciphertext,unit);
+        return (await tokens({grant_type:'refresh_token',refresh_token})).access_token;
+      }
       await Promise.all(jobs.data.map(async(job:any)=>{
         let issue=null;
-        try{await syncEvent(job,await token);}catch(e){issue=e instanceof Error?e.message:'Übertragung fehlgeschlagen.';}
+        try{
+          if(!byUnit.has(job.business_unit_id))byUnit.set(job.business_unit_id,workerToken(job.business_unit_id));
+          await syncEvent(job,await byUnit.get(job.business_unit_id));
+        }catch(e){issue=e instanceof Error?e.message:'Übertragung fehlgeschlagen.';}
         const result=await db.rpc('calendar_finish',{p_unit:job.business_unit_id,p_trip:job.trip_id,p_lease:job.lease,p_revision:job.revision,p_error:issue});
         if(result.error)throw Error('Übertragungsstatus konnte nicht gespeichert werden.');
       }));
@@ -62,7 +73,24 @@ Deno.serve(async req=>{
     if(!unit)return reply(403,{error:'Geschäftsbereich fehlt.'});
     const {data:member}=await db.from('memberships').select('role').eq('business_unit_id',unit.id).eq('user_id',user.id).eq('active',true).maybeSingle();
     if(member?.role!=='admin')return reply(403,{error:'Nur die Geschäftsleitung kann den Kalender verbinden.'});
-    if(body.action==='disconnect'){
+    const owner=unit.id+'/'+user.id;
+    if(body.action==='authorize')return reply(200,{url:await authorize(body.state,body.challenge)});
+    if(body.action==='exchange'){
+      const result=await exchange(body.code,body.verifier);
+      if(!result.refresh_token)throw Error('Bitte Google-Zugriff erneut bestätigen.');
+      const calendars=await writable(result.access_token);
+      if(!calendars.length)throw Error('Kein beschreibbarer Google-Kalender gefunden.');
+      const ticket=await seal(JSON.stringify({refresh:result.refresh_token,expires:Date.now()+600000}),owner);
+      return reply(200,{calendars,ticket});
+    }
+    if(body.action==='select'){
+      const grant=JSON.parse(await open(body.ticket,owner));
+      if(grant.expires<Date.now())throw Error('Kalenderauswahl abgelaufen. Bitte erneut anmelden.');
+      const token=await tokens({grant_type:'refresh_token',refresh_token:grant.refresh});
+      await verifyCalendar(body.calendarId,token.access_token);
+      const result=await db.rpc('calendar_connect_oauth',{p_unit:unit.id,p_calendar:body.calendarId,p_ciphertext:await seal(grant.refresh,unit.id)});
+      if(result.error)throw Error('Verbindung konnte nicht gespeichert werden. Bitte Status aktualisieren.');
+    }else if(body.action==='disconnect'){
       const result=await db.from('google_calendar_links').delete().eq('business_unit_id',unit.id);
       if(result.error)throw Error('Verbindung konnte nicht getrennt werden.');
     }else if(body.action==='connect'){
