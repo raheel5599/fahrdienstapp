@@ -100,12 +100,12 @@ Deno.serve(async(req:Request)=>{
 
   if(action==="create_trip"){
     if(!isStaff)return reply(403,{error:"Nur Chef oder Büro dürfen Fahrten anlegen."});
-    const customerId=String(body.customerId||"");
-    const customer=await customerForUnit(customerId);
-    if(!customer)return reply(404,{error:"Kunde wurde nicht gefunden."});
+    const customerId=clean(body.customerId);
+    const customer=customerId?await customerForUnit(customerId):null;
+    if(customerId&&!customer)return reply(404,{error:"Kunde wurde nicht gefunden."});
     const serviceDate=String(body.serviceDate||"");
     const scheduledTime=String(body.scheduledTime||"");
-    const fromAddress=clean(body.fromAddress)||[customer.street,customer.postal_code,customer.city].filter(Boolean).join(", ");
+    const fromAddress=clean(body.fromAddress)||[customer?.street,customer?.postal_code,customer?.city].filter(Boolean).join(", ");
     const toAddress=clean(body.toAddress);
     if(!serviceDate||!scheduledTime||!fromAddress||!toAddress)return reply(400,{error:"Datum, Uhrzeit, Abhol- und Zieladresse sind erforderlich."});
 
@@ -114,11 +114,11 @@ Deno.serve(async(req:Request)=>{
     const privateVatRate=Number(body.privateVatRate??0);if(![0,7,19].includes(privateVatRate))return reply(400,{error:"Steuersatz ist ungültig."});
     let fare:any=null;if(billingPayerType==="private"&&body.privatePrice!=null&&body.privatePrice!==""){try{fare=privateFare({amount:body.privatePrice,vatRate:body.privateVatRate})}catch(e){return reply(400,{error:e.message})}}
     const {data:trip,error}=await db.from("trips").insert({
-      business_unit_id:unit.id,customer_id:customer.id,service_date:serviceDate,scheduled_time:scheduledTime,billing_payer_type:billingPayerType,private_price:fare?.gross||null,private_vat_rate:privateVatRate,
+      business_unit_id:unit.id,customer_id:customer?.id??null,service_date:serviceDate,scheduled_time:scheduledTime,billing_payer_type:billingPayerType,private_price:fare?.gross||null,private_vat_rate:privateVatRate,
       direction:String(body.direction||"outbound"),trip_type:tripType,
       from_address:fromAddress,to_address:toAddress,status:"offen",notes:clean(body.notes),
-      customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),
-      customer_mobility:customer.mobility,created_by:user.id,updated_by:user.id
+      customer_name:customer?[customer.first_name,customer.last_name].filter(Boolean).join(" "):clean(body.customerName)?.slice(0,120)??null,
+      customer_mobility:customer?.mobility??null,created_by:user.id,updated_by:user.id
     }).select("*").single();
 
     if(error||!trip)return reply(400,{error:error?.message||"Fahrt konnte nicht angelegt werden."});
@@ -132,8 +132,8 @@ Deno.serve(async(req:Request)=>{
     const targetVehicleId=String(body.vehicleId||"");
     const [trip,driver,vehicle]=await Promise.all([getTrip(tripId),driverForUnit(targetDriverId),vehicleForUnit(targetVehicleId)]);
     if(!trip)return reply(404,{error:"Fahrt wurde nicht gefunden."});
-    const customer=await customerForUnit(trip.customer_id);
-    if(!customer)return reply(404,{error:"Kunde wurde nicht gefunden."});
+    const customer=trip.customer_id?await customerForUnit(trip.customer_id):null;
+    if(trip.customer_id&&!customer)return reply(404,{error:"Kunde wurde nicht gefunden."});
     if(!["offen","geplant"].includes(trip.status))return reply(400,{error:"Diese Fahrt kann in ihrem aktuellen Status nicht neu zugewiesen werden."});
     if(!driver)return reply(400,{error:"Fahrer ist nicht verfügbar oder gehört nicht zu diesem Bereich."});
     if(!vehicle)return reply(400,{error:"Fahrzeug ist nicht verfügbar oder gehört nicht zu diesem Bereich."});
@@ -163,7 +163,7 @@ Deno.serve(async(req:Request)=>{
     const nextStatus=trip.status==="offen"?"geplant":"geplant";
     const {data:updated,error}=await db.from("trips").update({
       driver_id:driver.id,driver_name:driver.full_name,vehicle_id:vehicle.id,vehicle_registration:vehicle.registration,
-      customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),customer_mobility:customer.mobility,
+      ...(customer?{customer_name:[customer.first_name,customer.last_name].filter(Boolean).join(" "),customer_mobility:customer.mobility}:{}),
       status:nextStatus,assigned_at:new Date().toISOString(),updated_by:user.id,updated_at:new Date().toISOString()
     }).eq("id",trip.id).select("*").single();
 
@@ -258,6 +258,20 @@ Deno.serve(async(req:Request)=>{
     if(nextStatus==="abgeschlossen" && ["fahrdienst","taxi"].includes(unitCode)){
       const {data:existingCase}=await db.from("trip_billing_cases").select("id").eq("trip_id",updated.id).maybeSingle();
       if(!existingCase){
+        if(!updated.customer_id){
+          const privateTrip=updated.billing_payer_type==="private";
+          const amount=privateTrip?updated.private_price:null;
+          const {error:caseError}=await db.from("trip_billing_cases").upsert({
+            business_unit_id:unit.id,trip_id:updated.id,customer_id:null,
+            payer_type:privateTrip?"private":"insurer",billing_status:"review",
+            review_message:"Fahrt ohne Kundenprofil. Kundendaten vor der Rechnungserstellung prüfen.",
+            private_amount:amount,private_vat_rate:updated.private_vat_rate||0,gross_amount:amount??0,
+            own_share_amount:0,insurer_amount:0,own_share_required:false,direction_count:1,
+            calculated_at:new Date().toISOString()
+          },{onConflict:"trip_id",ignoreDuplicates:true});
+          if(caseError)return reply(body.requestId?503:409,{error:"Fahrt abgeschlossen, Abrechnungsfall konnte nicht erstellt werden. Abschluss erneut speichern."});
+          return reply(200,{ok:true,trip:updated});
+        }
         const {data:insurance}=await db.from("customer_insurances")
           .select("*").eq("customer_id",updated.customer_id).eq("is_primary",true)
           .or("valid_from.is.null,valid_from.lte."+updated.service_date)

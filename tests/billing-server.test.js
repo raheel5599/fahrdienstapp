@@ -13,7 +13,7 @@ const rules={...rideCategories,...contractRules,...tariffRules,...businessRules,
 const unit='unit',org='org',day='2026-10-07';
 const group={id:'group',business_unit_id:unit,active:true,contract_scope:'group',contract_group:'ersatzkassen',base_fee:2.4,price_per_km:2.1};
 function database(contracts=[]){
- const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts.map(c=>structuredClone(c)),customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,service_date:day,trip_type:'Dialyse',status:'abgeschlossen',from_address:'A',to_address:'B'}],customer_business_units:[{business_unit_id:unit,customer_id:'customer'}],customers:[{id:'customer',active:true,first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',payer_type:'insurer',invoice_id:null,copay_rule_version:1,gross_amount:33.9,own_share_amount:5,billable_km:15,insurer_amount:28.9,tariff_breakdown:tariffRules.calculateTariff(group,[],{date:day,km:15,positionCode:'5130XX',treatmentCode:'52'}).lines,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
+ const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts.map(c=>structuredClone(c)),customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,customer_id:'customer',service_date:day,trip_type:'Dialyse',status:'abgeschlossen',from_address:'A',to_address:'B'}],customer_business_units:[{business_unit_id:unit,customer_id:'customer'}],customers:[{id:'customer',active:true,first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',payer_type:'insurer',invoice_id:null,copay_rule_version:1,gross_amount:33.9,own_share_amount:5,billable_km:15,insurer_amount:28.9,tariff_breakdown:tariffRules.calculateTariff(group,[],{date:day,km:15,positionCode:'5130XX',treatmentCode:'52'}).lines,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
  const writes=[];
  const db={async rpc(name,args){writes.push({rpc:name,args});if(name==='issue_case_finance_invoice'){writes.push({table:'invoices',insert:{...args.p_header,issuer_snapshot:args.p_header.issuerSnapshot}});writes.push({table:'invoice_items',insert:args.p_items});writes.push({table:'trip_billing_cases',patch:{billing_status:'invoiced'}});}return {data:{ok:true,id:'new',invoiceNumber:'RE-TEST'},error:null};},auth:{getUser:async()=>({data:{user:{id:'user'}}})},from(table){let filters=[],single=false,patch=null,insert=null,upsertOptions=null;
  const q={is(k,v){filters.push(r=>(r[k]??null)===v);return q},or(){return q},ilike(k,v){filters.push(r=>String(r[k]).toLowerCase()===String(v).toLowerCase());return q},select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},not(k,op,v){filters.push(r=>r[k]!==v);return q},order(){return q},limit(){return q},maybeSingle(){single=true;return q},single(){single=true;return q},update(v){patch=v;return q},upsert(v,options){insert=v;upsertOptions=options;return q},insert(v){insert=v;return q},delete(){return q},then(resolve,reject){try{let data=(rows[table]||[]).filter(r=>filters.every(f=>f(r)));if(patch){writes.push({table,patch});data=data.map(r=>Object.assign(r,patch));}if(insert){writes.push({table,insert,upsertOptions});data=[{id:'new',document_seq:1,...insert}];}return Promise.resolve({data:single?data[0]||null:data,error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject)}}};return q}};
@@ -225,4 +225,32 @@ test('ordinary taxi billing cases cannot be switched to insurance', async () => 
  const result=await call('manage-trip-billing',setup,{action:'recalculate',payerType:'insurer'});
  assert.equal(result.status,400);
  assert.equal(setup.writes.length,0);
+});
+
+test('Taxi and medical bookings accept a missing customer, while unknown profiles are rejected',async()=>{
+ const booking={action:'create_trip',serviceDate:day,scheduledTime:'12:00',fromAddress:'A',toAddress:'B'};
+ for(const [tripType,customerName,payer] of [['Taxi','  Alex  ','private'],['Dialyse','','auto']]){
+  const setup=database();
+  const result=await call('manage-dispatch',setup,{...booking,tripType,customerName});
+  assert.equal(result.status,200);
+  const trip=setup.writes.find(write=>write.table==='trips').insert;
+  assert.equal(trip.customer_id,null);
+  assert.equal(trip.customer_name,customerName.trim()||null);
+  assert.equal(trip.billing_payer_type,payer);
+ }
+ const setup=database();
+ assert.equal((await call('manage-dispatch',setup,{...booking,customerId:'foreign'})).status,404);
+ assert.equal(setup.writes.length,0);
+});
+
+test('completion without a customer preserves the recorded fare for billing review',async()=>{
+ const setup=database([]);
+ setup.rows.trip_billing_cases=[];
+ Object.assign(setup.rows.trips[0],{customer_id:null,status:'in_fahrt',billing_payer_type:'private',private_price:25,private_vat_rate:7});
+ const result=await call('manage-dispatch',setup,{action:'update_status',tripId:'trip',status:'abgeschlossen'});
+ assert.equal(result.status,200);
+ const billing=setup.writes.find(write=>write.table==='trip_billing_cases').insert;
+ assert.equal(billing.customer_id,null);
+ assert.equal(billing.private_amount,25);
+ assert.equal(billing.billing_status,'review');
 });

@@ -38,15 +38,15 @@ function hasConflict(form,trips,driverId,vehicleId,excludeId){
 }
 
 export default function LiveDispatchModal({trip,initialDate,trips=[],clients,drivers,vehicles,onClose,onSaved}){
-  const initialCustomer=clients.find(c=>c.id===trip?.customerId)||clients[0]||null;
   const initialDriver=drivers.find(d=>d.id===trip?.driverId)||null;
   const [form,setForm]=useState({
-    customerId:trip?.customerId||initialCustomer?.id||'',
+    customerId:trip?.customerId||'',
+    customerName:trip?.patient||'',
     serviceDate:trip?.date||initialDate||localDate(),
     scheduledTime:trip?.time||'12:00',
     direction:trip?.direction||'outbound',
     tripType:trip?.type||APP_CONFIG.tripTypes[0],
-    fromAddress:trip?.from||addressOf(initialCustomer),
+    fromAddress:trip?.from||'',
     destinationId:'',
     toAddress:trip?.to||'',
     driverId:trip?.driverId||'',
@@ -80,7 +80,13 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
 
   function chooseCustomer(id){
     const c=clients.find(x=>x.id===id);
-    setForm(v=>({...v,customerId:id,fromAddress:addressOf(c),destinationId:'',toAddress:'',tripType:v.tripType}));
+    setForm(v=>({
+      ...v,
+      customerId:id,
+      fromAddress:addressOf(c)||(!v.customerId?v.fromAddress:''),
+      destinationId:'',
+      toAddress:v.customerId?'':v.toAddress
+    }));
   }
 
   function chooseDestination(id){
@@ -146,11 +152,12 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
       <div className="form-section-title">{taxiTrip?taxiBrand:medicalBrand}</div>
       <div className="form-grid">
         <label><span>Fahrtart</span><select aria-label="Fahrtart" value={form.tripType} onChange={e=>set('tripType',e.target.value)} disabled={Boolean(trip)}><RideTypeOptions current={form.tripType}/></select></label>
-        <label><span>Kunde</span><select value={form.customerId} onChange={e=>chooseCustomer(e.target.value)} required disabled={Boolean(trip)}><option value="">Kunde auswählen</option>{clients.map(c=><option key={c.id} value={c.id}>{c.fullName}</option>)}</select></label>
+        <label><span>Kunde (optional)</span><select value={form.customerId} onChange={e=>chooseCustomer(e.target.value)} disabled={Boolean(trip)}><option value="">Ohne Kundenprofil</option>{clients.map(c=><option key={c.id} value={c.id}>{c.fullName}</option>)}</select></label>
+        {!form.customerId&&<label className="wide"><span>Fahrgastname (optional)</span><input value={form.customerName} onChange={e=>set('customerName',e.target.value)} maxLength={120} disabled={Boolean(trip)} placeholder="Z. B. nur Vorname"/></label>}
         <label><span>Datum</span><input type="date" value={form.serviceDate} onChange={e=>set('serviceDate',e.target.value)} required disabled={Boolean(trip)}/></label>
         <label><span>Uhrzeit</span><input type="time" value={form.scheduledTime} onChange={e=>set('scheduledTime',e.target.value)} required disabled={Boolean(trip)}/></label>
         <label><span>Richtung</span><select value={form.direction} onChange={e=>set('direction',e.target.value)} disabled={Boolean(trip)}><option value="outbound">Hinfahrt</option><option value="return">Rückfahrt</option></select></label>
-        {!taxiTrip&&<label><span>Abrechnung</span><select aria-label="Abrechnung" value={form.billingPayerType} onChange={e=>set('billingPayerType',e.target.value)} disabled={Boolean(trip)}><option value="auto">Nach hinterlegter Krankenversicherung</option><option value="insurer">Krankenkasse</option><option value="private">Privatfahrt</option></select></label>}
+        {!taxiTrip&&<label><span>Abrechnung</span><select aria-label="Abrechnung" value={form.billingPayerType} onChange={e=>set('billingPayerType',e.target.value)} disabled={Boolean(trip)}><option value="auto">{form.customerId?'Nach hinterlegter Krankenversicherung':'Später prüfen'}</option><option value="insurer">Krankenkasse</option><option value="private">Privatfahrt</option></select></label>}
         {taxiTrip&&<p className="billing-review-note wide">Diese Fahrt wird privat abgerechnet.</p>}
         {(taxiTrip||form.billingPayerType==='private')&&<><label><span>Privatpreis € je Fahrtrichtung</span><input type="number" min="0.01" step="0.01" value={form.privatePrice} onChange={e=>set('privatePrice',e.target.value)} disabled={Boolean(trip)} placeholder="Optional, später prüfen"/></label><label><span>MwSt. Privatfahrt</span><select value={form.privateVatRate} onChange={e=>set('privateVatRate',e.target.value)} disabled={Boolean(trip)}><option value="0">0 %</option><option value="7">7 %</option><option value="19">19 %</option></select></label></>}
         <RecentDestinationSelect customer={customer} address={form.toAddress} destinationId={form.destinationId} direction={form.direction} disabled={Boolean(trip)}
@@ -187,7 +194,7 @@ export default function LiveDispatchModal({trip,initialDate,trips=[],clients,dri
         {trip&& !['abgeschlossen','storniert'].includes(trip.status)&&<button type="button" className="danger-button" onClick={cancel} disabled={saving}>Fahrt stornieren</button>}
         <span/>
         <button type="button" className="secondary-button" onClick={onClose}>Abbrechen</button>
-        <button className="primary-button" disabled={saving||!clients.length||Boolean(driverConflict)||Boolean(vehicleConflict)}>{saving?'Wird gespeichert …':trip?'Zuweisung speichern':'Fahrt speichern'}</button>
+        <button className="primary-button" disabled={saving||Boolean(driverConflict)||Boolean(vehicleConflict)}>{saving?'Wird gespeichert …':trip?'Zuweisung speichern':'Fahrt speichern'}</button>
       </div>
     </form>
   </div>;
