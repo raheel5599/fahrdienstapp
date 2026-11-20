@@ -6,19 +6,20 @@ function recorder(codes){
  const calls=[];
  return {calls,request:async(url,init)=>{calls.push({url,...init});return new Response(null,{status:codes.shift()});}};
 }
-test('calendar shows the name and route in blue for medical trips without exposing internal notes',()=>{
+test('calendar sends an explicit end time and keeps internal medical notes private',()=>{
  const payload=eventPayload(job);
  assert.equal(payload.summary,'Fahrt · DE123456');
  assert.equal(payload.start.dateTime,'2026-11-19T08:15:00.000Z');
  assert.equal(payload.start.timeZone,'Europe/Berlin');
- assert.equal(payload.colorId,'9');
+ assert.equal(payload.end.dateTime,'2026-11-19T09:15:00.000Z');
+ assert.equal(Object.hasOwn(payload,'endTimeUnspecified'),false);
+ assert.equal(Object.hasOwn(payload,'colorId'),false);
  assert.equal(payload.description,'Patient/in: Patient<br>Abholung: Privatadresse &lt;1&gt;<br>Ziel: Ziel &amp; Straße');
  assert.doesNotMatch(JSON.stringify(payload),/Dialyse|Interne Bemerkung/);
 });
-test('taxi, courier and airport events are yellow',()=>{
+test('taxi, courier and airport events label the passenger',()=>{
  for(const trip_type of ['Taxi','Großraumtaxi','Flughafentransfer','Kurierfahrt']){
   const payload=eventPayload({...job,trip_type});
-  assert.equal(payload.colorId,'5');
   assert.match(payload.description,/^Fahrgast: /);
  }
 });

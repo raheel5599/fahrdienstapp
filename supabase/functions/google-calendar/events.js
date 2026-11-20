@@ -14,13 +14,12 @@ export function eventPayload(job) {
     ['Ziel', job.to_address]
   ].map(([label, value]) => `${label}: ${escapeHtml(value) || '–'}`).join('<br>');
   return {
-    colorId: taxi ? '5' : '9',
     description,
     summary: 'Fahrt · ' + job.trip_id.slice(0, 8).toUpperCase(),
     start: {dateTime: start.toISOString(), timeZone: 'Europe/Berlin'},
     // Dispatch supplies a scheduled departure, not an agreed end time.
     end: {dateTime: new Date(start.getTime() + 60 * 60000).toISOString(), timeZone: 'Europe/Berlin'},
-    endTimeUnspecified: true, visibility: 'private'
+    visibility: 'private'
   };
 }
 
@@ -30,6 +29,29 @@ export async function verifyCalendar(calendar, token, request = fetch) {
   if (!res.ok || !['owner','writer'].includes((await res.json()).accessRole)) {
     throw Error('Kalender-ID und Freigabe zum Ändern von Terminen prüfen.');
   }
+}
+
+async function calendarError(response, operation) {
+  const body = await response.json().catch(() => null);
+  const reason = body?.error?.errors?.[0]?.reason;
+  const allowedReasons = [
+    'badRequest', 'invalid', 'required', 'invalidParameter', 'invalidValue',
+    'forbidden', 'notFound', 'duplicate', 'rateLimitExceeded',
+    'userRateLimitExceeded', 'quotaExceeded', 'backendError'
+  ];
+  const message = typeof body?.error?.message === 'string' ? body.error.message : '';
+  const patterns = [
+    [/invalid resource id/i, 'Ungültige Termin-ID'],
+    [/start time.*end time|end time.*start time|time range/i, 'Ungültiger Zeitraum'],
+    [/time ?zone/i, 'Zeitzone abgelehnt'],
+    [/end.?time.?unspecified/i, 'Option für unbekannte Endzeit abgelehnt'],
+    [/invalid.*color|color.*invalid/i, 'Terminfarbe abgelehnt'],
+    [/missing.*(start|end)|(start|end).*required/i, 'Start- oder Endzeit fehlt']
+  ];
+  const detail = patterns.find(([pattern]) => pattern.test(message))?.[1];
+  const safeReason = allowedReasons.includes(reason) ? reason : null;
+  const details = [operation, safeReason, detail].filter(Boolean).join(', ');
+  return Error(`Google Kalender meldet HTTP ${response.status} (${details})`);
 }
 
 export async function syncEvent(job, token, request = fetch) {
@@ -44,13 +66,18 @@ export async function syncEvent(job, token, request = fetch) {
   if (job.removed) {
     const res = await send(url + '?sendUpdates=none', 'DELETE');
     if (res.ok || [404,410].includes(res.status)) return;
-    throw Error('Google Kalender meldet HTTP ' + res.status);
+    throw await calendarError(res, 'Termin löschen');
   }
   const payload = eventPayload(job);
+  let operation = 'Termin aktualisieren';
   let res = await send(url + '?sendUpdates=none', 'PATCH', payload);
   if (res.status === 404) {
+    operation = 'Termin erstellen';
     res = await send(base + '?sendUpdates=none', 'POST', {...payload, id});
-    if (res.status === 409) res = await send(url + '?sendUpdates=none', 'PATCH', payload);
+    if (res.status === 409) {
+      operation = 'Termin aktualisieren';
+      res = await send(url + '?sendUpdates=none', 'PATCH', payload);
+    }
   }
-  if (!res.ok) throw Error('Google Kalender meldet HTTP ' + res.status);
+  if (!res.ok) throw await calendarError(res, operation);
 }
