@@ -566,3 +566,11 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
 .route-swap-row{grid-column:1/-1;display:flex;justify-content:flex-end}
 .route-swap-button{display:inline-flex;align-items:center;gap:7px;min-height:36px;color:var(--ink)}
 .route-swap-button:disabled{opacity:.5;cursor:default}
+
+.document-preview-post{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line);background:#fff8e9;flex-shrink:0}
+.document-preview-post p{flex:1 1 360px;margin:0;font-size:13px;line-height:1.45}
+.document-preview-post a{text-decoration:none}
+@media(max-width:650px){
+ .document-preview-toolbar .document-preview-post-toggle{order:3;width:100%}
+ .document-preview-post{padding:10px 12px}
+}
