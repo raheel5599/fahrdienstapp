@@ -1,4 +1,4 @@
-import {isTaxiTrip} from '../_shared/rideCategories.js';
+import {isTaxiTrip, medicalTripTypes} from '../_shared/rideCategories.js';
 
 const eventsUrl = 'https://www.googleapis.com/calendar/v3/calendars/';
 
@@ -8,6 +8,7 @@ const escapeHtml = value => String(value ?? '').trim()
 export function eventPayload(job) {
   const start = new Date(job.start_at);
   const taxi = isTaxiTrip(job.trip_type);
+  const tripType = taxi || medicalTripTypes.includes(job.trip_type) ? job.trip_type : 'Fahrt';
   const description = [
     [taxi ? 'Fahrgast' : 'Patient/in', job.customer_name],
     ['Abholung', job.from_address],
@@ -16,7 +17,7 @@ export function eventPayload(job) {
   return {
     colorId: taxi ? '5' : '9',
     description,
-    summary: 'Fahrt · ' + job.trip_id.slice(0, 8).toUpperCase(),
+    summary: tripType + ' · ' + job.trip_id.slice(0, 8).toUpperCase(),
     start: {dateTime: start.toISOString(), timeZone: 'Europe/Berlin'},
     // Dispatch supplies a scheduled departure, not an agreed end time.
     end: {dateTime: new Date(start.getTime() + 60 * 60000).toISOString(), timeZone: 'Europe/Berlin'},
