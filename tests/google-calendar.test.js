@@ -13,13 +13,14 @@ test('calendar sends an explicit end time and keeps internal medical notes priva
  assert.equal(payload.start.timeZone,'Europe/Berlin');
  assert.equal(payload.end.dateTime,'2026-11-19T09:15:00.000Z');
  assert.equal(Object.hasOwn(payload,'endTimeUnspecified'),false);
- assert.equal(Object.hasOwn(payload,'colorId'),false);
+ assert.equal(payload.colorId,'9');
  assert.equal(payload.description,'Patient/in: Patient<br>Abholung: Privatadresse &lt;1&gt;<br>Ziel: Ziel &amp; Straße');
  assert.doesNotMatch(JSON.stringify(payload),/Dialyse|Interne Bemerkung/);
 });
-test('taxi, courier and airport events label the passenger',()=>{
+test('taxi, courier and airport events are yellow and label the passenger',()=>{
  for(const trip_type of ['Taxi','Großraumtaxi','Flughafentransfer','Kurierfahrt']){
   const payload=eventPayload({...job,trip_type});
+  assert.equal(payload.colorId,'5');
   assert.match(payload.description,/^Fahrgast: /);
  }
 });

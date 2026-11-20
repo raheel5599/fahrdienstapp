@@ -14,6 +14,7 @@ export function eventPayload(job) {
     ['Ziel', job.to_address]
   ].map(([label, value]) => `${label}: ${escapeHtml(value) || '–'}`).join('<br>');
   return {
+    colorId: taxi ? '5' : '9',
     description,
     summary: 'Fahrt · ' + job.trip_id.slice(0, 8).toUpperCase(),
     start: {dateTime: start.toISOString(), timeZone: 'Europe/Berlin'},
