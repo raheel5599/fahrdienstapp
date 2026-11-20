@@ -1,3 +1,4 @@
+import PlacesAddressInput from './PlacesAddressInput.jsx';
 import React,{useState} from 'react';
 import {ShieldCheck,X} from 'lucide-react';
 import {createClient,updateClient} from '../data/clients.js';
@@ -52,7 +53,8 @@ export default function ClientEditor({client,onClose,onSaved}){
 
       <div className="form-section-title">Adresse</div>
       <div className="form-grid">
-        <label className="wide"><span>Straße / Hausnummer</span><input value={form.street} onChange={e=>set('street',e.target.value)}/></label>
+        <PlacesAddressInput label="Straße / Hausnummer" value={form.street} onChange={value=>set('street',value)}
+          onSelect={({street,postalCode,city})=>setForm(current=>({...current,street,postalCode,city}))}/>
         <label><span>PLZ</span><input value={form.postalCode} onChange={e=>set('postalCode',e.target.value)}/></label>
         <label><span>Ort</span><input value={form.city} onChange={e=>set('city',e.target.value)}/></label>
         <label className="wide"><span>Adresszusatz</span><input value={form.addressExtra} onChange={e=>set('addressExtra',e.target.value)}/></label>

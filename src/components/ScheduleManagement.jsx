@@ -1,12 +1,13 @@
+import RecentDestinationSelect from './RecentDestinationSelect.jsx';
 import React,{useMemo,useState} from 'react';
 import {CalendarDays,PauseCircle,PlayCircle,Plus,Repeat2,Route,ShieldCheck,X} from 'lucide-react';
-import {APP_CONFIG} from '../config/app.js';
+import {RideTypeOptions} from './RideTypeOptions.jsx';
 import {createSeries,setSeriesActive,updateSeries} from '../data/schedules.js';
 
 const days=[1,2,3,4,5,6,7];
 const dayLabels={1:'Mo',2:'Di',3:'Mi',4:'Do',5:'Fr',6:'Sa',7:'So'};
 
-export default function ScheduleManagement({data,clients}){
+export default function ScheduleManagement({data,clients,onNewTrip}){
   const [editing,setEditing]=useState(null);
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
@@ -23,8 +24,11 @@ export default function ScheduleManagement({data,clients}){
 
   return <section className="schedule-page">
     <div className="schedule-toolbar panel">
-      <div><p className="eyebrow">TERMIN- & SERIENPLANUNG</p><h2>Serienfahrten</h2><p>Dialyse, Reha, Therapie und andere wiederkehrende Fahrten automatisch planen.</p></div>
-      <button className="primary-button" onClick={()=>setEditing({})}><Plus size={17}/> Serienfahrt anlegen</button>
+      <div><p className="eyebrow">TERMIN- & SERIENPLANUNG</p><h2>Serienfahrten</h2><p>Taxi-, Kurier-, Flughafen- und Krankenfahrten regelmäßig planen.</p></div>
+      <div className="heading-actions">
+        {onNewTrip&&<button className="secondary-button" onClick={onNewTrip}><Plus size={17}/> Einzelfahrt anlegen</button>}
+        <button className="primary-button" onClick={()=>setEditing({})}><Repeat2 size={17}/> Serienfahrt anlegen</button>
+      </div>
     </div>
 
     <div className="schedule-stats">
@@ -128,10 +132,11 @@ function SeriesEditor({item,clients,onClose,onSaved,onError}){
       <div className="form-grid">
         <label><span>Kunde</span><select value={form.customerId} onChange={e=>chooseCustomer(e.target.value)} required><option value="">Kunde auswählen</option>{clients.map(c=><option key={c.id} value={c.id}>{c.fullName}{c.isRegular?' · Stammkunde':''}</option>)}</select></label>
         <label><span>Name der Serie</span><input value={form.name} onChange={e=>set('name',e.target.value)} placeholder="z. B. Dialyse Mo/Mi/Fr" required/></label>
-        <label><span>Fahrtart</span><select value={form.tripType} onChange={e=>set('tripType',e.target.value)}>{APP_CONFIG.tripTypes.map(type=><option key={type}>{type}</option>)}</select></label>
-        <label><span>Häufiges Ziel</span><select value={form.destinationId} onChange={e=>chooseDestination(e.target.value)}><option value="">Manuell eingeben</option>{(customer?.destinations||[]).map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
+        <label><span>Fahrtart</span><select aria-label="Fahrtart" value={form.tripType} onChange={e=>set('tripType',e.target.value)}><RideTypeOptions current={form.tripType}/></select></label>
+        <RecentDestinationSelect customer={customer} address={form.destinationAddress} destinationId={form.destinationId}
+          onSavedTarget={chooseDestination} onRecentTarget={address=>setForm(current=>({...current,destinationId:'',destinationAddress:address}))}/>
         <label className="wide"><span>Abholadresse</span><input value={form.originAddress} onChange={e=>set('originAddress',e.target.value)} required/></label>
-        <label className="wide"><span>Zieladresse</span><input value={form.destinationAddress} onChange={e=>set('destinationAddress',e.target.value)} required/></label>
+        <label className="wide"><span>Zieladresse</span><input value={form.destinationAddress} onChange={e=>setForm(current=>({...current,destinationAddress:e.target.value,destinationId:''}))} required/></label>
       </div>
 
       <div className="form-section-title">Wochentage</div>

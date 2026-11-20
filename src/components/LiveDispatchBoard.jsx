@@ -1,5 +1,8 @@
-import React,{useMemo} from 'react';
-import {CalendarDays,Car,CheckCircle2,Clock3,Gauge,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
+import {isTaxiTrip,medicalBrand,taxiBrand} from '../../supabase/functions/_shared/rideCategories.js';
+import TaxiLiveOffice from './TaxiLiveOffice.jsx';
+import {isRemoteBackendConfigured} from '../config/backend.js';
+import React,{useMemo,useState} from 'react';
+import {CalendarDays,Car,ChevronDown,CheckCircle2,Clock3,MapPinned,Plus,Route,UserRoundCheck} from 'lucide-react';
 import {STATUS_LABELS,TRIP_STATUS} from '../domain/trips.js';
 
 function localDate(){
@@ -8,15 +11,24 @@ function localDate(){
 }
 function StatusPill({status}){return <span className={'status-pill status-'+status}><span className="dot"/>{STATUS_LABELS[status]||status}</span>;}
 
-export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
+export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew,summaryOnly=false,onOpenDispatch}){
+  const [business,setBusiness]=useState('all');
   const today=localDate();
+  const [date,setDate]=useState(today);
   const todayTrips=useMemo(()=>data.trips.filter(t=>t.date===today),[data.trips,today]);
+  const dateTrips=date===today?todayTrips:data.trips.filter(trip=>trip.date===date);
+  const visibleTrips=dateTrips.filter(trip=>business==='all'||isTaxiTrip(trip.type)===(business==='taxi'));
   const metrics=useMemo(()=>({
     today:todayTrips.length,
     moving:todayTrips.filter(t=>[TRIP_STATUS.ON_THE_WAY,TRIP_STATUS.ARRIVED,TRIP_STATUS.IN_PROGRESS].includes(t.status)).length,
     done:todayTrips.filter(t=>t.status===TRIP_STATUS.COMPLETED).length,
     open:todayTrips.filter(t=>t.status===TRIP_STATUS.OPEN).length
   }),[todayTrips]);
+
+  const upcoming=summaryOnly
+    ? data.trips.filter(trip=>trip.date>=today&&[TRIP_STATUS.OPEN,TRIP_STATUS.PLANNED].includes(trip.status))
+      .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,5)
+    : [];
 
   return <>
     <div className="metrics">
@@ -28,13 +40,46 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
 
     {data.error&&<div className="users-error">{data.error}</div>}
 
+    {summaryOnly ? <div className="central-overview">
+      <section className="panel central-section">
+        <div className="central-list-heading"><h2>Offene & geplante Fahrten</h2><button className="secondary-button" onClick={onOpenDispatch}>Disposition öffnen</button></div>
+        {upcoming.map(trip=><div className="central-preview-row" key={trip.id}><span>{trip.date===today?'Heute':trip.date.split('-').reverse().join('.')} · {trip.time}</span><strong>{trip.type}</strong><StatusPill status={trip.status}/></div>)}
+        {!data.loading&&!upcoming.length&&<p className="central-empty">Keine weiteren Fahrten geplant.</p>}
+      </section>
+      <section className="panel central-section"><h2>Fahrzeugstatus</h2>
+        {vehicles?.slice(0,5).map(vehicle=><div className="central-preview-row" key={vehicle.id}><Car size={17}/><strong>{vehicle.registration}</strong><span>{vehicle.status}</span></div>)}
+        {!vehicles?.length&&<p className="central-empty">Keine Fahrzeuge angelegt.</p>}
+      </section>
+    </div> : <>
+    {isRemoteBackendConfigured&&<TaxiLiveOffice/>}
     <div className="dashboard-grid">
       <section className="panel trips-panel">
-        <PanelTitle icon={Route} title="Heute – Live-Disposition" right={<button className="text-button" onClick={onNew}><Plus size={15}/> Neue Fahrt</button>}/>
+        <PanelTitle icon={Route} title={date===today?"Heute – Live-Disposition":"Terminübersicht"} right={<button className="text-button" onClick={()=>onNew(date)}><Plus size={15}/> Neue Fahrt</button>}/>
+        <div className="dispatch-filters">
+          <label>
+            <span>Datum</span>
+            <span className="dispatch-filter-control">
+              <span aria-hidden="true">{date.split('-').reverse().join('.')}</span>
+              <CalendarDays size={17} aria-hidden="true"/>
+              <input aria-label="Datum" type="date" value={date} onChange={event=>setDate(event.target.value||today)}/>
+            </span>
+          </label>
+          <label>
+            <span>Bereich</span>
+            <span className="dispatch-filter-control">
+              <select aria-label="Bereich" value={business} onChange={event=>setBusiness(event.target.value)}>
+                <option value="all">Alle Fahrten</option>
+                <option value="taxi">{taxiBrand}</option>
+                <option value="medical">{medicalBrand}</option>
+              </select>
+              <ChevronDown size={17} aria-hidden="true"/>
+            </span>
+          </label>
+        </div>
         <div className="trip-list">
-          {data.loading?<div className="users-loading">Fahrten werden geladen …</div>:todayTrips.length===0?
-            <div className="dispatch-empty"><CalendarDays/><h3>Heute noch keine Fahrten</h3><p>Einzelfahrt anlegen oder eine Serienfahrt planen.</p><button className="primary-button" onClick={onNew}><Plus size={17}/> Fahrt anlegen</button></div>:
-            todayTrips.map(t=><div className="trip-row" key={t.id}>
+          {data.loading?<div className="users-loading">Fahrten werden geladen …</div>:dateTrips.length===0?
+            <div className="dispatch-empty"><CalendarDays/><h3>An diesem Datum sind keine Fahrten geplant</h3><p>Einzelfahrt anlegen oder eine Serienfahrt planen.</p><button className="primary-button" onClick={()=>onNew(date)}><Plus size={17}/> Fahrt anlegen</button></div>:
+            !visibleTrips.length?<p className="users-loading">Keine Fahrten für diesen Bereich.</p>:visibleTrips.map(t=><div className="trip-row" key={t.id}>
               <div className="time">{t.time}</div>
               <div className="trip-main">
                 <div className="patient-line"><strong>{t.patient||'Kunde'}</strong>{t.wheelchair&&<span className="mini-badge">Rollstuhl</span>}</div>
@@ -66,14 +111,8 @@ export default function LiveDispatchBoard({data,drivers,vehicles,onEdit,onNew}){
         </div>
       </section>
 
-      <section className="panel quick-panel">
-        <PanelTitle icon={Gauge} title="Schnellaktionen"/>
-        <div className="quick-grid">
-          <button className="quick-action" onClick={onNew}><Plus size={20}/><span>Neue Fahrt</span></button>
-          <button className="quick-action" onClick={onNew}><Route size={20}/><span>Offene Fahrt zuweisen</span></button>
-        </div>
-      </section>
     </div>
+    </>}
   </>;
 }
 

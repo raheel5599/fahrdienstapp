@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {renderInvoice,renderReceipt} from '../src/lib/printFinanceDocuments.js';
+import {renderInvoice,renderInvoiceTemplate,renderReceipt} from '../src/lib/printFinanceDocuments.js';
 test('invoice preview includes own-share deduction, isolates items and escapes untrusted text',()=>{
  const html=renderInvoice({id:'i',invoice_number:'RE-1',payer_name:'<script>alert(1)</script>',status:'cancelled',gross_total:19},[
  {invoice_id:'i',description:'513052 Kilometer',quantity:8,unit:'km',unit_gross:3,vat_rate:0,gross_total:24},
@@ -22,4 +22,32 @@ test('issuer snapshot renders contact, bank and identifiers safely on both docum
 test('cancellation and replacement preview show escaped original references and reverse deduction',()=>{
  const html=renderInvoice({id:'s',document_type:'cancellation',invoice_number:'ST-1',reference_invoice_number:'RE-<1>',cancellation_reason:'Falsch <script>',status:'open',gross_total:-19,issuer_snapshot:{payment_note:'DO NOT PAY'}},[{invoice_id:'s',description:'Eigenanteil',quantity:1,unit_gross:5,gross_total:5,vat_rate:0}]);assert.match(html,/<h1>Stornobeleg/);assert.match(html,/Storno zu Rechnung RE-&lt;1&gt;/);assert.match(html,/Ausgestellt/);assert.match(html,/5,00/);assert.doesNotMatch(html,/<script|DO NOT PAY/);
  assert.match(renderInvoice({id:'r',reference_invoice_number:'RE-1',replaces_invoice_id:'o'}),/Ersatz für Rechnung RE-1/);
+});
+
+test('E-POST invoice uses the existing logo for the saved trip brand and a separate postcode line',()=>{
+ const invoice={id:'i',payer_name:'Muster & Partner',payer_address:'Teststraße 20, 53113 Bonn'};
+ const taxiInvoice={...invoice,issuer_snapshot:{trade_name:'TARIQ Taxi-Zentrale'}};
+ const taxi=renderInvoice(taxiInvoice,[],{postal:true,testPrint:true});
+ const medical=renderInvoice(invoice,[],{postal:true});
+ assert.match(taxi,/tariq-taxizentrale-logo\.png/);
+ assert.match(medical,/tariq-krankenfahrdienst-logo\.png/);
+ assert.match(taxi,/<div>Muster &amp; Partner<\/div><div>Teststraße 20<\/div><div>53113 Bonn<\/div>/);
+ assert.match(taxi,/\[\[Testdruck\]\]/);
+ assert.doesNotMatch(medical,/\[\[Testdruck\]\]/);
+ assert.equal(renderInvoice({...invoice,payer_address:'53113 Bonn'},[],{postal:true}),'');
+ assert.doesNotMatch(renderInvoice(taxiInvoice),/postal-address/);
+});
+
+test('E-POST sample retains the settings template and adds the test address below its letterhead',()=>{
+ const profile={company_name:'Musterbetrieb',bank_name:'Musterbank'};
+ const normal=renderInvoiceTemplate(profile,{issueDate:'2026-11-20'});
+ const testPrint=renderInvoiceTemplate(profile,{issueDate:'2026-11-20',testPrint:true});
+ for (const document of [normal,testPrint]) {
+   assert.match(document,/<h1>Rechnung<\/h1>/);
+   assert.match(document,/MUSTER – kein Zahlungsbeleg/);
+   assert.match(document,/Musterbank/);
+   assert.match(document,/Musterfahrt/);
+ }
+ assert.match(testPrint,/<div class="top">.*?<div class="postal-window">.*?<div>53113 Bonn<\/div>.*?\[\[Testdruck\]\]/);
+ assert.doesNotMatch(normal,/\[\[Testdruck\]\]/);
 });

@@ -81,3 +81,13 @@ export const assignTrip=(tripId,driverId,vehicleId)=>invoke({action:'assign_trip
 export const updateTripStatus=(tripId,status)=>invoke({action:'update_status',tripId,status});
 export const syncDriverStatus=input=>invoke({action:'update_status',...input});
 export const cancelTrip=tripId=>invoke({action:'cancel_trip',tripId});
+
+export async function loadRecentDestinations(customerId,direction,signal){
+  if (!supabase || !customerId) return [];
+  const unit=await getUnit();
+  const {data,error}=await supabase.rpc('recent_customer_destinations',{
+    p_unit:unit.id,p_customer:customerId,p_direction:direction
+  }).abortSignal(signal);
+  if(error) throw error;
+  return (data||[]).map(row=>row.address);
+}
