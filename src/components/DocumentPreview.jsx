@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {ExternalLink, Mail, Printer, X} from 'lucide-react';
 
-export default function DocumentPreview({title, html, onClose, invoiceForPost}) {
+export default function DocumentPreview({title, html, onClose, invoiceForPost, postalHtml}) {
   const frame = useRef(null);
   const close = useRef(null);
   const [ready, setReady] = useState(false);
@@ -11,7 +11,7 @@ export default function DocumentPreview({title, html, onClose, invoiceForPost}) 
     && invoiceForPost.document_type !== 'cancellation'
     && ['open', 'paid'].includes(invoiceForPost.status)
     && Boolean(invoiceForPost.invoice_number);
-  const hasPostalAddress = Boolean(invoiceForPost?.payer_address?.trim());
+  const postalPreview = canPreparePostalInvoice && showPostalOptions && Boolean(postalHtml);
   useEffect(() => {
     const previous = document.activeElement;
     const overflow = document.body.style.overflow;
@@ -31,6 +31,12 @@ export default function DocumentPreview({title, html, onClose, invoiceForPost}) 
       const win = frame.current?.contentWindow;
       if (!win) throw new Error();
       await win.document.fonts?.ready;
+      await Promise.all(Array.from(win.document.images, img => img.decode()));
+      const address = win.document.querySelector('.postal-address');
+      if (address && (address.scrollWidth > address.clientWidth || address.scrollHeight > address.clientHeight)) {
+        setError('Die Empfängeradresse passt nicht ins Brieffenster. Prüfe die gespeicherte Anschrift.');
+        return;
+      }
       win.focus();
       win.print();
     } catch {
@@ -46,16 +52,20 @@ export default function DocumentPreview({title, html, onClose, invoiceForPost}) 
         {canPreparePostalInvoice && <button
           className="secondary-button document-preview-post-toggle"
           aria-expanded={showPostalOptions}
-          onClick={() => setShowPostalOptions(visible => !visible)}
+          onClick={() => {
+            if (postalHtml) setReady(false);
+            setError('');
+            setShowPostalOptions(visible => !visible);
+          }}
         ><Mail size={17}/> E-POST MAILER</button>}
         <button ref={close} className="icon-button" onClick={onClose} aria-label="Vorschau schließen"><X/></button>
       </div>
       <p className="document-preview-help">Zum Speichern im Druckdialog „Als PDF speichern“ wählen. Auf iPad/iPhone die Druckvorschau über „Teilen“ sichern.</p>
       {canPreparePostalInvoice && showPostalOptions && <div className="document-preview-post">
-        <p>{hasPostalAddress
+        <p>{postalPreview
           ? 'Speichere die Rechnung als PDF. Lade sie im Geschäftskundenportal unter „Brief → E-POST MAILER → Sendungen → Neue Sendung hochladen“ hoch. Prüfe die Empfängeranschrift in der Briefvorschau und bestätige dort den Versand.'
-          : 'In dieser Rechnung fehlt die Empfängeranschrift. Prüfe die Rechnungsdaten, bevor du die Rechnung als Brief vorbereitest.'}</p>
-        {hasPostalAddress && <a
+          : 'Für den Brief werden Empfänger, Straße mit Hausnummer und eine letzte Zeile mit fünfstelliger PLZ und Ort benötigt. Prüfe die Rechnungsdaten.'}</p>
+        {postalPreview && <a
           className="secondary-button"
           href="https://geschaeftskunden.dhl.de/"
           target="_blank"
@@ -63,7 +73,7 @@ export default function DocumentPreview({title, html, onClose, invoiceForPost}) 
         ><ExternalLink size={16}/> Geschäftskundenportal öffnen</a>}
       </div>}
       {error&&<div className="users-error" role="alert">{error}</div>}
-      <iframe ref={frame} title={title} srcDoc={html} sandbox="allow-same-origin allow-modals" onLoad={()=>setReady(true)}/>
+      <iframe key={postalPreview ? 'post' : 'standard'} ref={frame} title={title} srcDoc={postalPreview ? postalHtml : html} sandbox="allow-same-origin allow-modals" onLoad={()=>setReady(true)}/>
     </section>
   </div>;
 }

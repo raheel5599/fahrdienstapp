@@ -1,4 +1,4 @@
-import {receiptLabels,taxiBrand} from "../_shared/rideCategories.js";
+import {isTaxiTrip,receiptLabels,taxiBrand} from "../_shared/rideCategories.js";
 import {correctionReason,correctionItems,correctionHeader} from "../_shared/financeCorrections.js";
 import {normalizeProfile,loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,tripServiceType} from "../_shared/contracts.js";
@@ -82,7 +82,10 @@ Deno.serve(async(req:Request)=>{
   if(body.action==="save_company_profile"){
     if(m.role!=="admin")return out(403,{error:"Nur Administratoren dürfen Unternehmensdaten ändern."});
     let profile;try{profile=normalizeProfile(body.profile)}catch(e){return out(400,{error:e.message})}
-    const {error}=await db.from("billing_profiles").upsert({...profile,business_unit_id:unit.id,updated_at:new Date().toISOString()},{onConflict:"business_unit_id"});
+    const kind=body.kind??"medical";
+    if(!["medical","taxi"].includes(kind)||(kind==="taxi"&&body.businessUnitCode!=="fahrdienst"))return out(400,{error:"Unbekanntes Rechnungsprofil."});
+    const fields=kind==="taxi"?{taxi_profile:profile}:profile;
+    const {error}=await db.from("billing_profiles").upsert({...fields,business_unit_id:unit.id,updated_at:new Date().toISOString()},{onConflict:"business_unit_id"});
     return error?out(400,{error:error.message}):out(200,{ok:true});
   }
   if(body.action==="create_invoice"){
@@ -112,13 +115,22 @@ Deno.serve(async(req:Request)=>{
       const {data}=await db.from("health_insurers").select("id,name,billing_contact,billing_email").eq("id",body.insurerId).eq("organization_id",p.organization_id).maybeSingle();
       insurer=data;
     }
+    const linkedTrips=new Map();
+    for(const id of new Set(items.map((item:any)=>item.tripId).filter(Boolean))){
+      const {data:trip,error}=await db.from("trips").select("service_date,trip_type,customer_mobility").eq("id",id).eq("business_unit_id",unit.id).maybeSingle();
+      if(error||!trip)return out(400,{error:"Fahrt nicht gefunden."});
+      linkedTrips.set(id,trip);
+    }
+    const tripKinds=new Set([...linkedTrips.values()].map(trip=>isTaxiTrip(trip.trip_type)?"taxi":"medical"));
+    if(tripKinds.size>1)return out(400,{error:"Taxi- und Krankenfahrten bitte getrennt abrechnen."});
+    const invoiceKind=body.businessUnitCode==="taxi"?"taxi":([...tripKinds][0]??(body.invoiceBrand==="taxi"?"taxi":"medical"));
+    if(invoiceKind==="taxi"&&body.payerType==="insurer")return out(400,{error:"Für Rechnungen an Krankenkassen bitte den Fahrtbereich Krankenfahrdienst wählen."});
     if(["fahrdienst","taxi"].includes(body.businessUnitCode)&&body.payerType==="insurer"){
       if(!insurer)return out(400,{error:"Krankenkasse fehlt."});
       const dates=[];
       for(const item of items){
         if(item.tripId){
-          const {data:trip}=await db.from("trips").select("service_date,business_unit_id,customer_mobility").eq("id",item.tripId).eq("business_unit_id",unit.id).maybeSingle();
-          if(!trip)return out(400,{error:"Fahrt nicht gefunden."});
+          const trip=linkedTrips.get(item.tripId);
           dates.push({date:trip.service_date,serviceType:tripServiceType(trip)});
         }else{
           if(!/^\d{4}-\d{2}-\d{2}$/.test(body.serviceDate||""))return out(400,{error:"Leistungsdatum für Vertragsprüfung fehlt."});
@@ -133,7 +145,7 @@ Deno.serve(async(req:Request)=>{
     const payerName=payerType==="insurer"?(insurer?.name||txt(body.payerName,180)):(txt(body.payerName,180)||customerName);
     if(!payerName)return out(400,{error:"Rechnungsempfänger fehlt."});
 
-    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
+    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id,{kind:invoiceKind,unitCode:body.businessUnitCode})}catch(e){return out(409,{error:e.message})}
     const {data:invoice,error:ie}=await db.from("invoices").insert({
       business_unit_id:unit.id,issuer_snapshot:issuer,service_date:txt(body.serviceDate,10),customer_id:customer?.id||null,insurer_id:insurer?.id||null,
       payer_type:payerType,payer_name:payerName,payer_address:txt(body.payerAddress,300)||(payerType==="private"?customerAddress:null),
@@ -165,7 +177,12 @@ Deno.serve(async(req:Request)=>{
     const {data:original}=await db.from("invoices").select("*").eq("id",body.invoiceId).eq("business_unit_id",unit.id).maybeSingle();
     if(!original||original.document_type!=="invoice"||original.status!=="cancelled")return out(409,{error:"Zuerst die Originalrechnung stornieren."});
     let header,items;
-    try{items=correctionItems(body.items);header=correctionHeader(body,original,await loadIssuerSnapshot(db,unit.id))}catch(e){return out(400,{error:e.message})}
+    try{
+      items=correctionItems(body.items);
+      const kind=original.issuer_snapshot?.trade_name===taxiBrand?"taxi":"medical";
+      const issuer=await loadIssuerSnapshot(db,unit.id,{kind,unitCode:body.businessUnitCode});
+      header=correctionHeader(body,original,issuer);
+    }catch(e){return out(400,{error:e.message})}
     if(original.payer_type==="insurer"&&["fahrdienst","taxi"].includes(body.businessUnitCode)){
       if(!await resolveContract(db,unit.id,p.organization_id,original.insurer_id,header.serviceDate,undefined,body.serviceType==="wheelchair"?"wheelchair":"standard"))return out(409,{error:"Kein gültiger Vertrag am Leistungsdatum. Ersatzrechnung gesperrt."});
     }
@@ -191,8 +208,8 @@ Deno.serve(async(req:Request)=>{
 
     const receivedFrom=txt(body.receivedFrom,180);
     if(amount<=0||!receivedFrom)return out(400,{error:"Zahler und Betrag sind erforderlich."});
-    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
-    if(receiptType!=="own_share")issuer={...issuer,trade_name:taxiBrand};
+    const kind=receiptType==="own_share"?"medical":"taxi";
+    let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id,{kind,unitCode:body.businessUnitCode})}catch(e){return out(409,{error:e.message})}
     const {data:receipt,error}=await db.from("receipts").insert({
       business_unit_id:unit.id,issuer_snapshot:issuer,customer_id:body.customerId||null,invoice_id:body.invoiceId||null,
       received_from:receivedFrom,purpose:receiptLabels[receiptType],receipt_type:receiptType,amount,

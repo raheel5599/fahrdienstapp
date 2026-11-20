@@ -254,3 +254,33 @@ test('completion without a customer preserves the recorded fare for billing revi
  assert.equal(billing.private_amount,25);
  assert.equal(billing.billing_status,'review');
 });
+
+test('taxi profile saves independently and drives manual and automatic taxi invoices',async()=>{
+ const setup=database([group]);
+ const profile={company_name:'Taxi-Profil',street:'Taxistraße 1',postal_code:'61197',city:'Florstadt'};
+ const save=await call('manage-finance',setup,{action:'save_company_profile',kind:'taxi',profile});
+ assert.equal(save.status,200);
+ const saved=setup.writes[0].insert;
+ assert.equal(saved.company_name,undefined);
+ assert.equal(saved.taxi_profile.company_name,'Taxi-Profil');
+ assert.equal(saved.business_unit_id,unit);
+ setup.rows.billing_profiles[0].taxi_profile=saved.taxi_profile;
+
+ const manual={action:'create_invoice',payerName:'Test',items:[{description:'Fahrt',quantity:1,unitGross:25}]};
+ const tryInvoice=async(input)=>{
+  setup.writes.length=0;
+  const result=await call('manage-finance',setup,input);
+  assert.equal(result.status,200);
+  return setup.writes.find(w=>w.table==='invoices'&&w.insert).insert.issuer_snapshot;
+ };
+ assert.equal((await tryInvoice({...manual,invoiceBrand:'taxi'})).company_name,'Taxi-Profil');
+ assert.equal((await tryInvoice(manual)).company_name,'Testunternehmen');
+ setup.rows.trips[0].trip_type='Taxi';
+ assert.equal((await tryInvoice({...manual,items:[{...manual.items[0],tripId:'trip'}]})).trade_name,'TARIQ Taxi-Zentrale');
+
+ setup.writes.length=0;
+ Object.assign(setup.rows.trip_billing_cases[0],{payer_type:'private',private_amount:25,private_vat_rate:0,gross_amount:25,insurer_amount:0,own_share_amount:0,own_share_required:false});
+ const billed=await call('manage-trip-billing',setup,{action:'invoice'});
+ assert.equal(billed.status,200);
+ assert.equal(setup.writes.find(w=>w.rpc==='issue_case_finance_invoice').args.p_header.issuerSnapshot.street,'Taxistraße 1');
+});

@@ -1,4 +1,4 @@
-import {isTaxiTrip,taxiBrand} from "../_shared/rideCategories.js";
+import {isTaxiTrip} from "../_shared/rideCategories.js";
 import {calculateOwnShare,insuranceValidOn,privateFare,COPAY_RULE_VERSION,tripDirectionLabel} from "../_shared/copay.js";
 import {loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
@@ -144,8 +144,7 @@ Deno.serve(async(req)=>{
      let fare;try{fare=privateFare({amount:c.private_amount,vatRate:c.private_vat_rate})}catch(e){return out(409,{error:e.message})}
      if(fare.gross!==cash(c.gross_amount)||c.own_share_required||cash(c.own_share_amount)>0||cash(c.insurer_amount)>0)return out(409,{error:"Privatfahrt zuerst neu berechnen."});
      const {data:customer}=await db.from("customers").select("*").eq("id",c.customer_id).maybeSingle();if(!customer)return out(400,{error:"Kunde fehlt."});
-     let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
-     if(taxiTrip)issuer={...issuer,trade_name:taxiBrand};
+     let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id,{kind:taxiTrip?"taxi":"medical",unitCode:body.businessUnitCode})}catch(e){return out(409,{error:e.message})}
      const name=[customer.first_name,customer.last_name].filter(Boolean).join(" "),address=[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
      const positions=[{trip_id:trip.id,description:[taxiTrip?trip.trip_type:"Privatfahrt",tripDirectionLabel(trip),trip.service_date,trip.from_address+" → "+trip.to_address].join(" · "),quantity:1,unit:"Fahrt",unit_gross:fare.gross,vat_rate:fare.vatRate,net_total:fare.net,vat_total:fare.vat,gross_total:fare.gross,item_kind:"charge"}];
      const {data,error}=await db.rpc("issue_case_finance_invoice",{p_case:c.id,p_unit:unit.id,p_actor:user.id,p_expected_updated_at:c.updated_at||null,p_header:{payerName:name,payerAddress:address,customerName:name,customerAddress:address,serviceDate:trip.service_date,issuerSnapshot:issuer},p_items:positions});return error?out(409,{error:error.message}):out(200,data);
