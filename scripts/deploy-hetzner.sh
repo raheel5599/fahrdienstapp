@@ -6,18 +6,38 @@ EXPECTED_HASH=${2:?Missing expected JavaScript hash}
 
 CADDY_CONTAINER=$(docker ps --filter name=^/fahrschulpilot-caddy-1$ --format '{{.Names}}' | head -n 1)
 [ -n "$CADDY_CONTAINER" ] || { echo 'Kein aktiver Caddy-Container gefunden.'; exit 1; }
-# Use the actual mounted config, never guess a server path.
-CADDY_CONFIG=$(docker inspect "$CADDY_CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}')
-[ -f "$CADDY_CONFIG" ] || { echo 'Caddyfile-Mount nicht gefunden. Serverkonfiguration muss geprüft werden.'; exit 1; }
-# Shared routing belongs to fahrschulpilot. App deployment is read-only here.
-python3 - "$CADDY_CONFIG" <<'ROUTES'
-import re, sys
-from pathlib import Path
-text = Path(sys.argv[1]).read_text()
-block = re.search(r'(?ms)^app\.tariq-fahrdienst\.de\s*\{(.*?)^\}', text)
-if not block or not re.search(r'(?m)^\s*reverse_proxy\s+tariq-fahrdienst-app:80\s*$', block.group(1)):
-    raise SystemExit('Geschützte Fahrdienst-Route fehlt. Zentrales Routing-Deployment erforderlich.')
-ROUTES
+# Inspect the routing structure without writing shared configuration.
+docker exec "$CADDY_CONTAINER" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null |
+  python3 -c '
+import json, sys
+
+def upstreams(route):
+    for handler in route.get("handle", []):
+        if handler.get("handler") == "reverse_proxy":
+            for target in handler.get("upstreams", []):
+                yield target.get("dial")
+        for child in handler.get("routes", []):
+            yield from upstreams(child)
+
+def routes_for_host(routes):
+    for route in routes:
+        if any("app.tariq-fahrdienst.de" in group.get("host", []) for group in route.get("match", [])):
+            yield route
+        for handler in route.get("handle", []):
+            yield from routes_for_host(handler.get("routes", []))
+
+data = json.load(sys.stdin)
+servers = data.get("apps", {}).get("http", {}).get("servers", {})
+targets = {
+    target
+    for server in servers.values()
+    for route in routes_for_host(server.get("routes", []))
+    for target in upstreams(route)
+}
+if not {"tariq-fahrdienst-app:80", "tariq-fahrdienst-app"}.intersection(targets):
+    sys.exit("Der dedizierte Fahrdienst-Zielcontainer ist in der Caddy-Route nicht bestätigt.")
+print("Fahrdienst-Zielcontainer in der Caddy-Route bestätigt.")
+'
 APP_DIR=/home/fpadmin/sites/tariq-fahrdienst-app
 mkdir -p "$APP_DIR"
 tar -xzf /tmp/tariq-fahrdienst-app.tar.gz -C "$APP_DIR"
