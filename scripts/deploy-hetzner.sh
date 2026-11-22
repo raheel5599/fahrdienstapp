@@ -49,29 +49,22 @@ if [[ "$route_type" == shared ]]; then
   domain=app.tariq-fahrdienst.de
   root=/srv/public-sites
   test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/srv/public-sites"}}{{.Name}}{{end}}{{end}}' "$frontend")" = tariq-websites-public
-  if ! docker exec "$frontend" nginx -T 2>/dev/null | python3 -c '
-import re, sys
-host = "app.tariq-fahrdienst.de"
-expected = "/srv/public-sites/" + host
-text = sys.stdin.read()
-for match in re.finditer(r"(?m)^\s*server\s*\{", text):
-    depth = 1
-    end = match.end()
-    while depth and end < len(text):
-        depth += (text[end] == "{") - (text[end] == "}")
-        end += 1
-    block = text[match.end():end]
-    if not re.search(r"(?m)^\s*server_name\s+" + re.escape(host) + r"\s*;", block):
-        continue
-    roots = re.findall(r"(?m)^\s*root\s+([^;]+);", block)
-    sys.exit(0 if roots and all(root.rstrip("/") == expected for root in roots) else 1)
-sys.exit(1)
-'; then
-    echo 'Die separate Fahrdienst-Veröffentlichungsmappe im gemeinsamen Frontend konnte nicht bestätigt werden.' >&2
-    exit 1
-  fi
   stage=$(mktemp -d)
   trap 'rm -rf "$stage"' EXIT
+  docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend/" > "$stage/live.html"
+  live_asset=$(sed -nE 's@.*src="(/assets/index-[A-Za-z0-9_-]+[.]js)".*@\1@p' "$stage/live.html" | head -n 1)
+  [[ "$live_asset" =~ ^/assets/index-[A-Za-z0-9_-]+[.]js$ ]] || { echo 'Das gemeinsame Frontend liefert keine erkennbare Fahrdienst-App.' >&2; exit 1; }
+  docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend$live_asset" > "$stage/live.js"
+  site=''
+  for candidate in "$domain" tariq-fahrdienst-app fahrdienst-app; do
+    if docker exec "$frontend" cat "$root/$candidate/index.html" 2>/dev/null | cmp -s "$stage/live.html" - &&
+       docker exec "$frontend" cat "$root/$candidate$live_asset" 2>/dev/null | cmp -s "$stage/live.js" -; then
+      [[ -z "$site" ]] || { echo 'Mehrere Fahrdienst-Verzeichnisse liefern denselben Build.' >&2; exit 1; }
+      site=$candidate
+    fi
+  done
+  [[ -n "$site" ]] || { echo 'Der aktive Fahrdienst-Build stimmt mit keinem bestätigten App-Verzeichnis überein.' >&2; exit 1; }
+  rm "$stage/live.html" "$stage/live.js"
   tar -xzf /tmp/tariq-fahrdienst-app-dist.tar.gz -C "$stage"
   test "$(sha256sum "$stage$EXPECTED_ASSET" | cut -d ' ' -f 1)" = "$EXPECTED_HASH"
   grep -Fq "$EXPECTED_ASSET" "$stage/index.html"
@@ -95,7 +88,7 @@ sys.exit(1)
       mv -Tf "$previous" "$site"
       exit 1
     fi
-  ' sh "$root" "$domain" "$release"
+  ' sh "$root" "$site" "$release"
   if ! docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend/" 2>/dev/null | cmp -s "$stage/index.html" - ||
      ! docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend$EXPECTED_ASSET" 2>/dev/null | cmp -s "$stage$EXPECTED_ASSET" -; then
     docker exec "$frontend" sh -eu -c '
@@ -106,7 +99,7 @@ sys.exit(1)
         rm "$2"
         mv "$3" "$2"
       fi
-    ' sh "$root" "$domain" "$release-previous"
+    ' sh "$root" "$site" "$release-previous"
     echo 'Fahrdienst-Build im gemeinsamen Frontend nicht bestätigt. Vorherige Version wiederhergestellt.' >&2
     exit 1
   fi
