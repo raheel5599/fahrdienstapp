@@ -1,3 +1,4 @@
+import {epostTestSettings,uploadEpostTest} from './epostTest.js';
 import {isTaxiTrip,receiptLabels,taxiBrand} from "../_shared/rideCategories.js";
 import {correctionReason,correctionItems,correctionHeader} from "../_shared/financeCorrections.js";
 import {normalizeProfile,loadIssuerSnapshot} from "../_shared/businessProfile.js";
@@ -29,6 +30,15 @@ Deno.serve(async(req:Request)=>{
   if(!unit)return out(400,{error:"Geschäftsbereich fehlt."});
   const {data:m}=await db.from("memberships").select("role").eq("user_id",u.user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
   if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
+
+  if(body.action==="epost_test_status"||body.action==="epost_test_upload"){
+    if(body.businessUnitCode!=="fahrdienst"||m.role!=="admin")return out(403,{error:"Nur Administratoren des Fahrdiensts dürfen den E-POST-Test ausführen."});
+    const settings=epostTestSettings(name=>Deno.env.get(name),unit.id);
+    if(body.action==="epost_test_status")return out(200,{configured:Boolean(settings)});
+    if(!settings)return out(503,{error:"Der E-POST-Sammelkorb ist serverseitig noch nicht konfiguriert."});
+    const result=await uploadEpostTest(settings);
+    return out(result.status,result.body);
+  }
 
   if(["record_accounting_entry","cancel_accounting_entry"].includes(body.action)){
     if(body.confirmed!==true)return out(400,{error:"Tatsächliche Zahlung oder Korrektur bestätigen."});

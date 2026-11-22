@@ -5,8 +5,9 @@ import {renderInvoiceTemplate} from '../lib/printFinanceDocuments.js';
 import DocumentPreview from './DocumentPreview.jsx';
 import GoogleCalendarSettings from './GoogleCalendarSettings.jsx';
 import PatientReminderSettings from './PatientReminderSettings.jsx';
+import EpostSettings from './EpostSettings.jsx';
 
-const sections={company:'Unternehmen',invoice:'Rechnung & Bank',calendar:'Google Kalender',reminders:'Mahnstufen'};
+const sections={company:'Unternehmen',invoice:'Rechnung & Bank',calendar:'Google Kalender',reminders:'Mahnstufen',epost:'E-POST MAILER'};
 const brands={medical:medicalBrand,taxi:taxiBrand};
 const groups=[
  ['Unternehmen',[['company_name','Firmenname'],['owner_name','Inhaber / Rechtsform'],['street','Straße und Hausnummer'],['postal_code','Postleitzahl'],['city','Ort'],['country','Land'],['phone','Telefon'],['email','E-Mail'],['website','Website']]],
@@ -70,7 +71,7 @@ export default function BusinessSettings({loadProfile=loadCompanyProfile,savePro
   <div className="module-tabs central-tabs" aria-label="Einstellungsbereiche">
    {Object.entries(sections).map(([id,label])=><button type="button" key={id} className={section===id?'active':''} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}
   </div>
-  <div hidden={section==='calendar'||section==='reminders'}>
+  <div hidden={section!=='company'&&section!=='invoice'}>
    <div className="module-toolbar">
     <div>
      <h2>{section==='company'?'Unternehmensdaten':'Rechnung & Bank'}</h2>
@@ -111,6 +112,7 @@ export default function BusinessSettings({loadProfile=loadCompanyProfile,savePro
    <div className="panel central-section calendar-colors" aria-label="Kalenderfarben"><span><i className="calendar-taxi"/> Taxi, Kurier & Flughafen</span><span><i className="calendar-medical"/> Krankenfahrten</span></div>
   </div>
   <div hidden={section!=='reminders'}><PatientReminderSettings api={reminderSettingsApi}/></div>
+  {section==='epost'&&<EpostSettings/>}
   {preview&&<DocumentPreview title="Rechnungsvorlage – Muster" onClose={()=>setPreview(false)} html={renderInvoiceTemplate({...profile,trade_name:brands[kind]})}/>}
  </section>;
 }

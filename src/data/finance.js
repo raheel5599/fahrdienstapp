@@ -38,3 +38,6 @@ export const cancelPatientPayment=(paymentId,reason)=>invoke({action:"cancel_pat
 
 export async function loadPatientReminderSettings(){const r=await invoke({action:"patient_reminder_config"});if(!r.ok)throw Error(r.message);return r.data;}
 export const savePatientReminderSettings=input=>invoke({action:"save_patient_reminder_settings",...input});
+
+export const loadEpostTestStatus=()=>invoke({action:"epost_test_status"});
+export const sendEpostTest=()=>invoke({action:"epost_test_upload"});
