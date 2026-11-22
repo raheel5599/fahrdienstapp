@@ -31,8 +31,8 @@ export default function LoginScreen({ onLogin }) {
     <main className="login-page">
       <section className="login-card">
         <div className="login-brand">
-          <img src={APP_CONFIG.logoUrl} alt={APP_CONFIG.name} />
-          <p>{APP_CONFIG.name}</p>
+          <strong className="central-login-wordmark">{APP_CONFIG.name}</strong>
+
           <h1>Interne Verwaltung</h1>
           <span>Disposition · Fahrer · Kunden · Abrechnung</span>
         </div>

@@ -1,5 +1,112 @@
 #!/usr/bin/env bash
 set -euo pipefail
+EXPECTED_ASSET=${1:?Missing expected JavaScript asset}
+EXPECTED_HASH=${2:?Missing expected JavaScript hash}
+[[ "$EXPECTED_ASSET" =~ ^/assets/index-[A-Za-z0-9_-]+[.]js$ && "$EXPECTED_HASH" =~ ^[0-9a-f]{64}$ ]] || exit 1
+
+CADDY_CONTAINER=$(docker ps --filter name=^/fahrschulpilot-caddy-1$ --format '{{.Names}}' | head -n 1)
+[ -n "$CADDY_CONTAINER" ] || { echo 'Kein aktiver Caddy-Container gefunden.'; exit 1; }
+# Inspect the routing structure without writing shared configuration.
+route_type=$(docker exec "$CADDY_CONTAINER" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null |
+  python3 -c '
+import json, sys
+
+def upstreams(route):
+    for handler in route.get("handle", []):
+        if handler.get("handler") == "reverse_proxy":
+            for target in handler.get("upstreams", []):
+                yield target.get("dial")
+        for child in handler.get("routes", []):
+            yield from upstreams(child)
+
+def routes_for_host(routes):
+    for route in routes:
+        if any("app.tariq-fahrdienst.de" in group.get("host", []) for group in route.get("match", [])):
+            yield route
+        for handler in route.get("handle", []):
+            yield from routes_for_host(handler.get("routes", []))
+
+data = json.load(sys.stdin)
+servers = data.get("apps", {}).get("http", {}).get("servers", {})
+targets = {
+    target
+    for server in servers.values()
+    for route in routes_for_host(server.get("routes", []))
+    for target in upstreams(route)
+}
+dedicated = bool({"tariq-fahrdienst-app:80", "tariq-fahrdienst-app"}.intersection(targets))
+shared = bool({"tariq-frontend:80", "tariq-websites:80", "tariq-frontend", "tariq-websites"}.intersection(targets))
+if dedicated == shared:
+    sys.exit("Die Fahrdienst-Route konnte keinem eindeutigen Deployment-Ziel zugeordnet werden.")
+print("dedicated" if dedicated else "shared")
+')
+
+if [[ "$route_type" == shared ]]; then
+  frontend=tariq-frontend
+  if ! docker inspect --format '{{.State.Running}}' "$frontend" 2>/dev/null | grep -Fxq true; then
+    frontend=tariq-websites
+  fi
+  domain=app.tariq-fahrdienst.de
+  root=/srv/public-sites
+  test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/srv/public-sites"}}{{.Name}}{{end}}{{end}}' "$frontend")" = tariq-websites-public
+  stage=$(mktemp -d)
+  trap 'rm -rf "$stage"' EXIT
+  docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend/" > "$stage/live.html"
+  live_asset=$(sed -nE 's@.*src="(/assets/index-[A-Za-z0-9_-]+[.]js)".*@\1@p' "$stage/live.html" | head -n 1)
+  [[ "$live_asset" =~ ^/assets/index-[A-Za-z0-9_-]+[.]js$ ]] || { echo 'Das gemeinsame Frontend liefert keine erkennbare Fahrdienst-App.' >&2; exit 1; }
+  docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend$live_asset" > "$stage/live.js"
+  site=''
+  for candidate in "$domain" tariq-fahrdienst-app fahrdienst-app; do
+    if docker exec "$frontend" cat "$root/$candidate/index.html" 2>/dev/null | cmp -s "$stage/live.html" - &&
+       docker exec "$frontend" cat "$root/$candidate$live_asset" 2>/dev/null | cmp -s "$stage/live.js" -; then
+      [[ -z "$site" ]] || { echo 'Mehrere Fahrdienst-Verzeichnisse liefern denselben Build.' >&2; exit 1; }
+      site=$candidate
+    fi
+  done
+  [[ -n "$site" ]] || { echo 'Der aktive Fahrdienst-Build stimmt mit keinem bestätigten App-Verzeichnis überein.' >&2; exit 1; }
+  rm "$stage/live.html" "$stage/live.js"
+  tar -xzf /tmp/tariq-fahrdienst-app-dist.tar.gz -C "$stage"
+  test "$(sha256sum "$stage$EXPECTED_ASSET" | cut -d ' ' -f 1)" = "$EXPECTED_HASH"
+  grep -Fq "$EXPECTED_ASSET" "$stage/index.html"
+  chmod -R a+rX "$stage"
+  release=".fahrdienst-app-$(date -u +%Y%m%d%H%M%S%N)"
+  docker exec "$frontend" mkdir "$root/$release"
+  docker cp "$stage/." "$frontend:$root/$release/"
+  docker exec "$frontend" sh -eu -c '
+    cd "$1"
+    site=$2
+    release=$3
+    previous="$release-previous"
+    test -f "$site/index.html"
+    if [ -L "$site" ]; then
+      ln -s "$(readlink "$site")" "$previous"
+    else
+      mv "$site" "$previous"
+    fi
+    ln -s "$release" "$release-link"
+    if ! mv -Tf "$release-link" "$site"; then
+      mv -Tf "$previous" "$site"
+      exit 1
+    fi
+  ' sh "$root" "$site" "$release"
+  if ! docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend/" 2>/dev/null | cmp -s "$stage/index.html" - ||
+     ! docker exec "$CADDY_CONTAINER" wget -qO- --header "Host: $domain" "http://$frontend$EXPECTED_ASSET" 2>/dev/null | cmp -s "$stage$EXPECTED_ASSET" -; then
+    docker exec "$frontend" sh -eu -c '
+      cd "$1"
+      if [ -L "$3" ]; then
+        mv -Tf "$3" "$2"
+      else
+        rm "$2"
+        mv "$3" "$2"
+      fi
+    ' sh "$root" "$site" "$release-previous"
+    echo 'Fahrdienst-Build im gemeinsamen Frontend nicht bestätigt. Vorherige Version wiederhergestellt.' >&2
+    exit 1
+  fi
+  echo 'Fahrdienst-App im gemeinsamen Frontend veröffentlicht. HTML und JavaScript entsprechen dem geprüften Build.'
+  exit 0
+fi
+
 APP_DIR=/home/fpadmin/sites/tariq-fahrdienst-app
 mkdir -p "$APP_DIR"
 tar -xzf /tmp/tariq-fahrdienst-app.tar.gz -C "$APP_DIR"
@@ -26,33 +133,17 @@ config["services"]={sys.argv[2]:config["services"]["app"]}
 json.dump(config,sys.stdout)
 ' "$APP_PROJECT" "$APP_SERVICE" > "$APP_COMPOSE"
 docker compose -p "$APP_PROJECT" -f "$APP_COMPOSE" up -d --build "$APP_SERVICE"
-APP_IP=$(docker inspect tariq-fahrdienst-app --format '{{(index .NetworkSettings.Networks "fahrschulpilot_web").IPAddress}}')
+
+# Check the running app from Caddy's network without exposing it outside the VPN.
 for attempt in $(seq 1 15); do
-  if curl --fail --silent --show-error "http://$APP_IP/" -o /tmp/fahrdienst-health.html; then break; fi
-  if [ "$attempt" = 15 ]; then docker logs --tail 30 tariq-fahrdienst-app; exit 1; fi
-  sleep 2
-done
-grep -q 'id="root"' /tmp/fahrdienst-health.html
-CADDY_CONTAINER=$(docker ps --filter name=^/fahrschulpilot-caddy-1$ --format '{{.Names}}' | head -n 1)
-[ -n "$CADDY_CONTAINER" ] || { echo 'Kein aktiver Caddy-Container gefunden.'; exit 1; }
-# Use the actual mounted config, never guess a server path.
-CADDY_CONFIG=$(docker inspect "$CADDY_CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}')
-[ -f "$CADDY_CONFIG" ] || { echo 'Caddyfile-Mount nicht gefunden. Serverkonfiguration muss geprüft werden.'; exit 1; }
-# Shared routing belongs to fahrschulpilot. App deployment is read-only here.
-python3 - "$CADDY_CONFIG" <<'ROUTES'
-import re, sys
-from pathlib import Path
-text = Path(sys.argv[1]).read_text()
-block = re.search(r'(?ms)^app\.tariq-fahrdienst\.de\s*\{(.*?)^\}', text)
-if not block or not re.search(r'(?m)^\s*reverse_proxy\s+tariq-fahrdienst-app:80\s*$', block.group(1)):
-    raise SystemExit('Geschützte Fahrdienst-Route fehlt. Zentrales Routing-Deployment erforderlich.')
-ROUTES
-for attempt in $(seq 1 15); do
-  if curl --fail --silent --show-error --max-time 15 https://app.tariq-fahrdienst.de/ -o /tmp/fahrdienst-public.html && grep -q 'id="root"' /tmp/fahrdienst-public.html; then
-    echo 'Fahrdienst-App öffentlich erreichbar.'
+  if live_html=$(docker exec "$CADDY_CONTAINER" wget -qO- http://tariq-fahrdienst-app/ 2>/dev/null) &&
+     [[ "$live_html" == *'id="root"'* && "$live_html" == *"$EXPECTED_ASSET"* ]] &&
+     live_hash=$(docker exec "$CADDY_CONTAINER" wget -qO- "http://tariq-fahrdienst-app$EXPECTED_ASSET" 2>/dev/null | sha256sum) &&
+     [[ "${live_hash%% *}" == "$EXPECTED_HASH" ]]; then
+    echo 'Fahrdienst-App im Proxy-Netz erreichbar, JavaScript entspricht dem geprüften Build.'
     exit 0
   fi
   sleep 2
 done
-echo 'App intern erreichbar; öffentlicher TLS-/Proxy-Check noch fehlgeschlagen.'
+echo 'Der neue Build konnte im Proxy-Netz nicht bestätigt werden.' >&2
 exit 1

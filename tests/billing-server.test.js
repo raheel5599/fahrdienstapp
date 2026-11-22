@@ -8,11 +8,12 @@ import * as tariffRules from '../supabase/functions/_shared/tariffs.js';
 import * as businessRules from '../supabase/functions/_shared/businessProfile.js';
 import * as correctionRules from '../supabase/functions/_shared/financeCorrections.js';
 import * as copayRules from '../supabase/functions/_shared/copay.js';
-const rules={...contractRules,...tariffRules,...businessRules,...correctionRules,...copayRules};
+import * as rideCategories from '../supabase/functions/_shared/rideCategories.js';
+const rules={...rideCategories,...contractRules,...tariffRules,...businessRules,...correctionRules,...copayRules};
 const unit='unit',org='org',day='2026-10-07';
 const group={id:'group',business_unit_id:unit,active:true,contract_scope:'group',contract_group:'ersatzkassen',base_fee:2.4,price_per_km:2.1};
 function database(contracts=[]){
- const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts.map(c=>structuredClone(c)),customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,service_date:day,trip_type:'Dialyse',status:'abgeschlossen',from_address:'A',to_address:'B'}],customers:[{id:'customer',first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',payer_type:'insurer',invoice_id:null,copay_rule_version:1,gross_amount:33.9,own_share_amount:5,billable_km:15,insurer_amount:28.9,tariff_breakdown:tariffRules.calculateTariff(group,[],{date:day,km:15,positionCode:'5130XX',treatmentCode:'52'}).lines,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
+ const rows={billing_profiles:[{business_unit_id:unit,company_name:'Testunternehmen',street:'Teststraße 1',postal_code:'12345',city:'Teststadt'}],app_profiles:[{id:'user',organization_id:org,active:true}],business_units:[{id:unit,organization_id:org,code:'fahrdienst',active:true}],memberships:[{user_id:'user',business_unit_id:unit,active:true,role:'admin'}],health_insurers:[{id:'tk',name:'Techniker',organization_id:org,active:true}],payer_contracts:contracts.map(c=>structuredClone(c)),customer_insurances:[{id:'insurance',customer_id:'customer',exempt:false}],trips:[{id:'trip',business_unit_id:unit,customer_id:'customer',service_date:day,trip_type:'Dialyse',status:'abgeschlossen',from_address:'A',to_address:'B'}],customer_business_units:[{business_unit_id:unit,customer_id:'customer'}],customers:[{id:'customer',active:true,first_name:'Test',last_name:'Patient'}],contract_rates:[{contract_id:'group',active:true,position_code:'5130XX',sort_order:0}],trip_billing_cases:[{id:'case',trip_id:'trip',customer_id:'customer',business_unit_id:unit,insurance_id:'insurance',insurer_id:'tk',contract_id:'group',billing_status:'ready',payer_type:'insurer',invoice_id:null,copay_rule_version:1,gross_amount:33.9,own_share_amount:5,billable_km:15,insurer_amount:28.9,tariff_breakdown:tariffRules.calculateTariff(group,[],{date:day,km:15,positionCode:'5130XX',treatmentCode:'52'}).lines,position_code:'5130XX',treatment_code:'52',billing_position:'513052'}]};
  const writes=[];
  const db={async rpc(name,args){writes.push({rpc:name,args});if(name==='issue_case_finance_invoice'){writes.push({table:'invoices',insert:{...args.p_header,issuer_snapshot:args.p_header.issuerSnapshot}});writes.push({table:'invoice_items',insert:args.p_items});writes.push({table:'trip_billing_cases',patch:{billing_status:'invoiced'}});}return {data:{ok:true,id:'new',invoiceNumber:'RE-TEST'},error:null};},auth:{getUser:async()=>({data:{user:{id:'user'}}})},from(table){let filters=[],single=false,patch=null,insert=null,upsertOptions=null;
  const q={is(k,v){filters.push(r=>(r[k]??null)===v);return q},or(){return q},ilike(k,v){filters.push(r=>String(r[k]).toLowerCase()===String(v).toLowerCase());return q},select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},not(k,op,v){filters.push(r=>r[k]!==v);return q},order(){return q},limit(){return q},maybeSingle(){single=true;return q},single(){single=true;return q},update(v){patch=v;return q},upsert(v,options){insert=v;upsertOptions=options;return q},insert(v){insert=v;return q},delete(){return q},then(resolve,reject){try{let data=(rows[table]||[]).filter(r=>filters.every(f=>f(r)));if(patch){writes.push({table,patch});data=data.map(r=>Object.assign(r,patch));}if(insert){writes.push({table,insert,upsertOptions});data=[{id:'new',document_seq:1,...insert}];}return Promise.resolve({data:single?data[0]||null:data,error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject)}}};return q}};
@@ -194,4 +195,92 @@ test('5148 verifies entered copay against insurance and preserves meter total in
  assert.equal(r.status,200);assert.equal(r.body.case.billing_position,'514805');assert.equal(r.body.case.billable_km,8.5);assert.equal(r.body.case.gross_amount,37.5);assert.equal(r.body.case.insurer_amount,32.5);assert.equal(r.body.case.tariff_breakdown.length,1);
  const bad=database([contract]);r=await call('manage-trip-billing',bad,{...input,confirmedOwnShare:3});assert.equal(r.status,409);assert.equal(bad.writes.length,0);
  const exempt=database([contract]);exempt.rows.customer_insurances[0].exempt=true;r=await call('manage-trip-billing',exempt,{...input,confirmedOwnShare:0});assert.equal(r.status,200);assert.equal(r.body.case.own_share_amount,0);assert.equal(r.body.case.insurer_amount,37.5);
+});
+
+test('combined dispatch always routes an ordinary taxi booking to private billing', async () => {
+ const setup=database();
+ const booking={action:'create_trip',customerId:'customer',serviceDate:day,scheduledTime:'12:00',fromAddress:'A',toAddress:'B'};
+ const taxi=await call('manage-dispatch',setup,{...booking,tripType:'Kurierfahrt',billingPayerType:'insurer',privatePrice:25,privateVatRate:19});
+ assert.equal(taxi.status,200);
+ assert.equal(taxi.body.trip.billing_payer_type,'private');
+ assert.equal(taxi.body.trip.private_price,25);
+ const medical=await call('manage-dispatch',setup,{...booking,tripType:'Dialyse',billingPayerType:'insurer'});
+ assert.equal(medical.status,200);
+ assert.equal(medical.body.trip.billing_payer_type,'insurer');
+});
+
+test('taxi receipt keeps the legal issuer and snapshots the Taxi-Zentrale trade name', async () => {
+ const setup=database();
+ const result=await call('manage-finance',setup,{action:'create_receipt',amount:25,receivedFrom:'Test',receiptType:'airport_trip'});
+ assert.equal(result.status,200);
+ const receipt=setup.writes.find(write=>write.table==='receipts'&&write.insert).insert;
+ assert.equal(receipt.issuer_snapshot.company_name,'Testunternehmen');
+ assert.equal(receipt.issuer_snapshot.trade_name,'TARIQ Taxi-Zentrale');
+ assert.equal(receipt.purpose,'Flughafenfahrt');
+});
+
+test('ordinary taxi billing cases cannot be switched to insurance', async () => {
+ const setup=database();
+ setup.rows.trips[0].trip_type='Taxi';
+ const result=await call('manage-trip-billing',setup,{action:'recalculate',payerType:'insurer'});
+ assert.equal(result.status,400);
+ assert.equal(setup.writes.length,0);
+});
+
+test('Taxi and medical bookings accept a missing customer, while unknown profiles are rejected',async()=>{
+ const booking={action:'create_trip',serviceDate:day,scheduledTime:'12:00',fromAddress:'A',toAddress:'B'};
+ for(const [tripType,customerName,payer] of [['Taxi','  Alex  ','private'],['Dialyse','','auto']]){
+  const setup=database();
+  const result=await call('manage-dispatch',setup,{...booking,tripType,customerName});
+  assert.equal(result.status,200);
+  const trip=setup.writes.find(write=>write.table==='trips').insert;
+  assert.equal(trip.customer_id,null);
+  assert.equal(trip.customer_name,customerName.trim()||null);
+  assert.equal(trip.billing_payer_type,payer);
+ }
+ const setup=database();
+ assert.equal((await call('manage-dispatch',setup,{...booking,customerId:'foreign'})).status,404);
+ assert.equal(setup.writes.length,0);
+});
+
+test('completion without a customer preserves the recorded fare for billing review',async()=>{
+ const setup=database([]);
+ setup.rows.trip_billing_cases=[];
+ Object.assign(setup.rows.trips[0],{customer_id:null,status:'in_fahrt',billing_payer_type:'private',private_price:25,private_vat_rate:7});
+ const result=await call('manage-dispatch',setup,{action:'update_status',tripId:'trip',status:'abgeschlossen'});
+ assert.equal(result.status,200);
+ const billing=setup.writes.find(write=>write.table==='trip_billing_cases').insert;
+ assert.equal(billing.customer_id,null);
+ assert.equal(billing.private_amount,25);
+ assert.equal(billing.billing_status,'review');
+});
+
+test('taxi profile saves independently and drives manual and automatic taxi invoices',async()=>{
+ const setup=database([group]);
+ const profile={company_name:'Taxi-Profil',street:'Taxistraße 1',postal_code:'61197',city:'Florstadt'};
+ const save=await call('manage-finance',setup,{action:'save_company_profile',kind:'taxi',profile});
+ assert.equal(save.status,200);
+ const saved=setup.writes[0].insert;
+ assert.equal(saved.company_name,undefined);
+ assert.equal(saved.taxi_profile.company_name,'Taxi-Profil');
+ assert.equal(saved.business_unit_id,unit);
+ setup.rows.billing_profiles[0].taxi_profile=saved.taxi_profile;
+
+ const manual={action:'create_invoice',payerName:'Test',items:[{description:'Fahrt',quantity:1,unitGross:25}]};
+ const tryInvoice=async(input)=>{
+  setup.writes.length=0;
+  const result=await call('manage-finance',setup,input);
+  assert.equal(result.status,200);
+  return setup.writes.find(w=>w.table==='invoices'&&w.insert).insert.issuer_snapshot;
+ };
+ assert.equal((await tryInvoice({...manual,invoiceBrand:'taxi'})).company_name,'Taxi-Profil');
+ assert.equal((await tryInvoice(manual)).company_name,'Testunternehmen');
+ setup.rows.trips[0].trip_type='Taxi';
+ assert.equal((await tryInvoice({...manual,items:[{...manual.items[0],tripId:'trip'}]})).trade_name,'TARIQ Taxi-Zentrale');
+
+ setup.writes.length=0;
+ Object.assign(setup.rows.trip_billing_cases[0],{payer_type:'private',private_amount:25,private_vat_rate:0,gross_amount:25,insurer_amount:0,own_share_amount:0,own_share_required:false});
+ const billed=await call('manage-trip-billing',setup,{action:'invoice'});
+ assert.equal(billed.status,200);
+ assert.equal(setup.writes.find(w=>w.rpc==='issue_case_finance_invoice').args.p_header.issuerSnapshot.street,'Taxistraße 1');
 });

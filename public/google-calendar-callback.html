@@ -1,0 +1,9 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Google Kalender · TARIQ</title><p id="status">Anmeldung wird an die TARIQ Zentrale übergeben …</p><script>
+const params=new URLSearchParams(location.search);
+history.replaceState(null,'',location.pathname);
+if(window.opener){
+ window.opener.postMessage({type:'tariq-calendar',state:params.get('state'),code:params.get('code'),error:params.get('error')},location.origin);
+ window.close();
+}
+document.getElementById('status').textContent='Du kannst dieses Fenster schließen und zur TARIQ Zentrale zurückkehren.';
+</script></html>

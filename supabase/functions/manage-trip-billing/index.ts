@@ -1,3 +1,4 @@
+import {isTaxiTrip} from "../_shared/rideCategories.js";
 import {calculateOwnShare,insuranceValidOn,privateFare,COPAY_RULE_VERSION,tripDirectionLabel} from "../_shared/copay.js";
 import {loadIssuerSnapshot} from "../_shared/businessProfile.js";
 import {resolveContract,composeBillingPosition,defaultTreatment,tripServiceType} from "../_shared/contracts.js";
@@ -36,6 +37,21 @@ Deno.serve(async(req)=>{
  if(!unit)return out(400,{error:"Geschäftsbereich fehlt."});
  const {data:m}=await db.from("memberships").select("role").eq("user_id",user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
  if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
+ if(body.action==="monthly_private_invoice"){
+   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month||""))||!body.customerId||
+      !["taxi","medical"].includes(body.kind)||!Array.isArray(body.entries)||!body.entries.length||
+      body.entries.some(entry=>!entry?.id||!entry.updatedAt)||new Set(body.entries.map(entry=>entry.id)).size!==body.entries.length){
+     return out(400,{error:"Kunde, Leistungsmonat und Fahrten prüfen."});
+   }
+   try{
+     const issuer=await loadIssuerSnapshot(db,unit.id,{kind:body.kind,unitCode:body.businessUnitCode});
+     const {data,error}=await db.rpc("issue_monthly_private_invoice",{
+       p_unit:unit.id,p_actor:user.id,p_customer:body.customerId,p_month:body.month+"-01",p_kind:body.kind,
+       p_original:body.original||null,p_entries:Object.fromEntries(body.entries.map(entry=>[entry.id,entry.updatedAt])),p_issuer:issuer
+     });
+     return error?out(409,{error:error.message}):out(200,data);
+   }catch(error){return out(409,{error:error.message});}
+ }
  if(body.action==="monthly_own_share_invoice"){
    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month||""))||!body.customerId||!Array.isArray(body.entries)||body.entries.length<1||body.entries.length>100||new Set(body.entries.map(e=>e?.id)).size!==body.entries.length)return out(400,{error:"Patient, Monat und 1 bis 100 verschiedene Eigenanteile auswählen."});
    try{
@@ -56,17 +72,21 @@ Deno.serve(async(req)=>{
  if(!c)return out(404,{error:"Abrechnungsfall nicht gefunden."});
  const {data:trip}=await db.from("trips").select("*").eq("id",c.trip_id).maybeSingle();
  if(!trip)return out(404,{error:"Fahrt fehlt."});
+ const taxiTrip=isTaxiTrip(trip.trip_type);
 
  if(body.action==="recalculate"){
    if(c.invoice_id||c.own_share_invoice_id)return out(409,{error:"Abgerechnete Fahrt oder ausgestellte Eigenanteilsrechnung zuerst stornieren und klären."});
    if((c.direction_count||1)!==1)return out(409,{error:"Hin- und Rückfahrt als getrennte Fahrten prüfen."});
    const payer=body.payerType??c.payer_type;
    if(payer!=="private"&&payer!=="insurer")return out(400,{error:"Kostenträger auswählen."});
+   if(taxiTrip&&payer!=="private")return out(400,{error:"Taxi-, Kurier- und Flughafenfahrten werden privat abgerechnet."});
    if(payer!==c.payer_type&&c.receipt_id)return out(409,{error:"Kostenträger bei vorhandener Eigenanteilquittung gesperrt."});
    if(payer==="private"){
      let fare;try{fare=privateFare({amount:body.privateAmount??c.private_amount??trip.private_price,vatRate:body.privateVatRate??c.private_vat_rate??trip.private_vat_rate})}catch(e){return out(400,{error:e.message})}
      if(c.receipt_id||c.own_share_paid)return out(409,{error:"Bestehende Eigenanteilquittung zuerst klären."});
-     const patch={payer_type:"private",private_amount:fare.gross,private_vat_rate:fare.vatRate,gross_amount:fare.gross,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",direction_count:1,insurance_id:null,insurer_id:null,contract_id:null,position_code:null,billing_position:null,tariff_breakdown:[],billing_status:"ready",review_message:"",calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+     const cycle=body.privateBillingCycle===undefined?c.private_billing_cycle:body.privateBillingCycle||null;
+     if(cycle!=null&&!["single","monthly"].includes(cycle))return out(400,{error:"Abrechnungsrhythmus ist ungültig."});
+     const patch={private_billing_cycle:cycle,payer_type:"private",private_amount:fare.gross,private_vat_rate:fare.vatRate,gross_amount:fare.gross,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",direction_count:1,insurance_id:null,insurer_id:null,contract_id:null,position_code:null,billing_position:null,tariff_breakdown:[],billing_status:"ready",review_message:"",calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
      let query=db.from("trip_billing_cases").update(patch).eq("id",c.id).eq("business_unit_id",unit.id).is("invoice_id",null);if(c.updated_at)query=query.eq("updated_at",c.updated_at);const {data,error}=await query.select("*").maybeSingle();return error||!data?out(409,{error:error?.message||"Fall wurde geändert. Neu laden."}):out(200,{ok:true,case:data});
    }
    let insurance:any=null;
@@ -135,14 +155,15 @@ Deno.serve(async(req)=>{
  }
 
  if(body.action==="invoice"){
+   if(taxiTrip&&c.payer_type!=="private")return out(409,{error:"Taxi-Abrechnung zuerst als Privatfahrt berechnen."});
    if(c.payer_type==="private"){
      if(c.billing_status!=="ready"||c.invoice_id||trip.status!=="abgeschlossen")return out(409,{error:"Abgeschlossene Privatfahrt zuerst prüfen."});
      let fare;try{fare=privateFare({amount:c.private_amount,vatRate:c.private_vat_rate})}catch(e){return out(409,{error:e.message})}
      if(fare.gross!==cash(c.gross_amount)||c.own_share_required||cash(c.own_share_amount)>0||cash(c.insurer_amount)>0)return out(409,{error:"Privatfahrt zuerst neu berechnen."});
      const {data:customer}=await db.from("customers").select("*").eq("id",c.customer_id).maybeSingle();if(!customer)return out(400,{error:"Kunde fehlt."});
-     let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id)}catch(e){return out(409,{error:e.message})}
+     let issuer;try{issuer=await loadIssuerSnapshot(db,unit.id,{kind:taxiTrip?"taxi":"medical",unitCode:body.businessUnitCode})}catch(e){return out(409,{error:e.message})}
      const name=[customer.first_name,customer.last_name].filter(Boolean).join(" "),address=[customer.street,[customer.postal_code,customer.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-     const positions=[{trip_id:trip.id,description:["Privatfahrt",tripDirectionLabel(trip),trip.service_date,trip.from_address+" → "+trip.to_address].join(" · "),quantity:1,unit:"Fahrt",unit_gross:fare.gross,vat_rate:fare.vatRate,net_total:fare.net,vat_total:fare.vat,gross_total:fare.gross,item_kind:"charge"}];
+     const positions=[{trip_id:trip.id,description:[taxiTrip?trip.trip_type:"Privatfahrt",tripDirectionLabel(trip),trip.service_date,trip.from_address+" → "+trip.to_address].join(" · "),quantity:1,unit:"Fahrt",unit_gross:fare.gross,vat_rate:fare.vatRate,net_total:fare.net,vat_total:fare.vat,gross_total:fare.gross,item_kind:"charge"}];
      const {data,error}=await db.rpc("issue_case_finance_invoice",{p_case:c.id,p_unit:unit.id,p_actor:user.id,p_expected_updated_at:c.updated_at||null,p_header:{payerName:name,payerAddress:address,customerName:name,customerAddress:address,serviceDate:trip.service_date,issuerSnapshot:issuer},p_items:positions});return error?out(409,{error:error.message}):out(200,data);
    }
    if(c.copay_rule_version!==COPAY_RULE_VERSION)return out(409,{error:"Eigenanteil zuerst automatisch neu berechnen."});

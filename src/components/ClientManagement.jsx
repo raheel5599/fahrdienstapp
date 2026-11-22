@@ -1,7 +1,7 @@
 import DocumentManagement from './DocumentManagement.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {
-  BadgeEuro,CalendarDays,FileCheck2,MapPin,Plus,Search,ShieldCheck,
+  BadgeEuro,Building2,CalendarDays,FileCheck2,MapPin,Plus,Search,ShieldCheck,
   Stethoscope,UserRoundCheck,UsersRound,X
 } from 'lucide-react';
 import ClientEditor from './ClientEditor.jsx';
@@ -50,10 +50,10 @@ export default function ClientManagement({data,trips=[]}){
     <div className="client-toolbar panel">
       <div>
         <p className="eyebrow">KUNDENVERWALTUNG</p>
-        <h2>Patienten & Stammkunden</h2>
+        <h2>Kunden & Firmen</h2>
         <p>Stammdaten, Kasse, Zuzahlung, häufige Ziele und Genehmigungen zentral verwalten.</p>
       </div>
-      <button className="primary-button" onClick={()=>setEditor({})}><Plus size={17}/> Kunde anlegen</button>
+      <button className="primary-button" onClick={()=>setEditor({})}><Plus size={17}/> Kunde oder Firma anlegen</button>
     </div>
 
     <div className="client-stats">
@@ -73,9 +73,9 @@ export default function ClientManagement({data,trips=[]}){
           {data.loading?<div className="users-loading">Kunden werden geladen …</div>:filtered.length===0?
             <div className="client-empty"><UsersRound/><h3>Noch keine Kunden</h3><p>Lege den ersten Kunden an.</p></div>:
             filtered.map(item=><button key={item.id} className={`client-row ${selectedId===item.id?'selected':''}`} onClick={()=>{setSelectedId(item.id);setTab('overview');}}>
-              <span className="client-avatar">{item.firstName?.slice(0,1)}{item.lastName?.slice(0,1)}</span>
+              <span className="client-avatar">{item.customerType==='company'?<Building2 size={17}/>:<>{item.firstName?.slice(0,1)}{item.lastName?.slice(0,1)}</>}</span>
               <span className="client-row-main"><strong>{item.fullName}</strong><small>{item.customerNumber} · {item.city||'Ort fehlt'}</small></span>
-              <span className="client-row-meta"><strong>{item.insurances?.[0]?.insurer_name||'Keine Kasse'}</strong><small>{mobilityLabel[item.mobility]||item.mobility}</small></span>
+              <span className="client-row-meta"><strong>{item.customerType==='company'?'Firma':item.insurances?.[0]?.insurer_name||'Keine Kasse'}</strong>{item.customerType!=='company'&&<small>{mobilityLabel[item.mobility]||item.mobility}</small>}</span>
               <span className={`account-status ${item.active?'active':'blocked'}`}><span/>{item.active?'Aktiv':'Inaktiv'}</span>
             </button>)
           }
@@ -97,23 +97,23 @@ export default function ClientManagement({data,trips=[]}){
 
             <div className="client-tabs">
               <Tab active={tab==='overview'} onClick={()=>setTab('overview')} icon={UsersRound} text="Übersicht"/>
-              <Tab active={tab==='insurance'} onClick={()=>setTab('insurance')} icon={ShieldCheck} text="Kasse"/>
+              {selected.customerType!=='company'&&<Tab active={tab==='insurance'} onClick={()=>setTab('insurance')} icon={ShieldCheck} text="Kasse"/>}
               <Tab active={tab==='destinations'} onClick={()=>setTab('destinations')} icon={MapPin} text="Ziele"/>
               <Tab active={tab==='documents'} onClick={()=>setTab('documents')} icon={FileCheck2} text="Originalbelege"/>
-              <Tab active={tab==='approvals'} onClick={()=>setTab('approvals')} icon={FileCheck2} text="Verordnung"/>
+              {selected.customerType!=='company'&&<Tab active={tab==='approvals'} onClick={()=>setTab('approvals')} icon={FileCheck2} text="Verordnung"/>}
             </div>
 
             {tab==='documents'&&<DocumentManagement key={selected.id} clients={[selected]} customerId={selected.id} trips={trips}/>}
             {tab==='overview'&&<Overview client={selected}/>}
-            {tab==='insurance'&&<InsuranceTab client={selected} onSaved={()=>refresh('Kassendaten wurden gespeichert.')} onError={setError}/>}
+            {selected.customerType!=='company'&&tab==='insurance'&&<InsuranceTab client={selected} onSaved={()=>refresh('Kassendaten wurden gespeichert.')} onError={setError}/>}
             {tab==='destinations'&&<DestinationTab client={selected} onSaved={()=>refresh('Ziel wurde gespeichert.')} onError={setError}/>}
-            {tab==='approvals'&&<ApprovalTab client={selected} onSaved={()=>refresh('Verordnung / Genehmigung wurde gespeichert.')} onError={setError}/>}
+            {selected.customerType!=='company'&&tab==='approvals'&&<ApprovalTab client={selected} onSaved={()=>refresh('Verordnung / Genehmigung wurde gespeichert.')} onError={setError}/>}
           </>
         }
       </section>
     </div>
 
-    {editor&&<ClientEditor client={editor.id?editor:null} onClose={()=>setEditor(null)} onSaved={async message=>{setEditor(null);await refresh(message);}}/>}
+    {editor&&<ClientEditor client={editor.id?editor:null} onClose={()=>setEditor(null)} onSaved={async (message,customer)=>{setEditor(null);await refresh(message);if(customer.id){setSelectedId(customer.id);setTab('overview');}}}/>}
   </section>;
 }
 
@@ -122,21 +122,23 @@ function Tab({active,onClick,icon:Icon,text}){return <button className={active?'
 
 function Overview({client}){
   const primary=client.insurances?.[0];
+  const company=client.customerType==='company';
   return <div className="client-overview">
     <div className="client-summary-grid">
-      <Summary icon={Stethoscope} label="Mobilität" value={mobilityLabel[client.mobility]||client.mobility}/>
-      <Summary icon={ShieldCheck} label="Krankenkasse" value={primary?.insurer_name||'Nicht hinterlegt'}/>
-      <Summary icon={BadgeEuro} label="Zuzahlung" value={primary?.exempt?(primary.exempt_until?'Befreiung bis '+primary.exempt_until:'Befreit'):primary?'Automatisch je Fahrt':'Nicht hinterlegt'}/>
+      {!company&&<Summary icon={Stethoscope} label="Mobilität" value={mobilityLabel[client.mobility]||client.mobility}/>}
+      {!company&&<Summary icon={ShieldCheck} label="Krankenkasse" value={primary?.insurer_name||'Nicht hinterlegt'}/>}
+      {!company&&<Summary icon={BadgeEuro} label="Zuzahlung" value={primary?.exempt?(primary.exempt_until?'Befreiung bis '+primary.exempt_until:'Befreit'):primary?'Automatisch je Fahrt':'Nicht hinterlegt'}/>}
       <Summary icon={CalendarDays} label="Stammkunde" value={client.isRegular?'Ja':'Nein'}/>
     </div>
     <div className="client-info-grid">
+      <Info label="Privatabrechnung" value={client.privateBillingCycle==='monthly'?'Monatlich':'Einzeln'}/>
       <Info label="Telefon" value={client.phone||'—'}/>
       <Info label="E-Mail" value={client.email||'—'}/>
-      <Info label="Geburtsdatum" value={client.birthDate?new Date(client.birthDate).toLocaleDateString('de-DE'):'—'}/>
-      <Info label="Begleitperson" value={client.companionRequired?'Erforderlich':'Nein'}/>
-      <Info label="Hilfe Ein-/Aussteigen" value={client.needsAssistance?'Ja':'Nein'}/>
+      {!company&&<Info label="Geburtsdatum" value={client.birthDate?new Date(client.birthDate).toLocaleDateString('de-DE'):'—'}/>}
+      {!company&&<Info label="Begleitperson" value={client.companionRequired?'Erforderlich':'Nein'}/>}
+      {!company&&<Info label="Hilfe Ein-/Aussteigen" value={client.needsAssistance?'Ja':'Nein'}/>}
       <Info label="Häufige Ziele" value={String(client.destinations?.length||0)}/>
-      <Info label="Genehmigungen" value={String(client.authorizations?.length||0)}/>
+      {!company&&<Info label="Genehmigungen" value={String(client.authorizations?.length||0)}/>}
       <Info label="Status" value={client.active?'Aktiv':'Inaktiv'}/>
     </div>
     {client.notes&&<div className="client-note"><strong>Notiz</strong><p>{client.notes}</p></div>}

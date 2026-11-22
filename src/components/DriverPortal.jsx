@@ -1,3 +1,5 @@
+import DispatchRadio from './DispatchRadio.jsx';
+import TaxiLiveRide from './TaxiLiveRide.jsx';
 import DriverOfflinePanel from './DriverOfflinePanel.jsx';
 import {useDriverOffline} from '../hooks/useDriverOffline.js';
 import Messages from './Messages.jsx';
@@ -52,8 +54,10 @@ async function notify(title,body,tag){
   }catch{return false;}
 }
 
-export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,offlineSend,statusApi=updateTripStatus}){
+export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,offlineSend,statusApi=updateTripStatus,taxiApi}){
   const [shiftState,setShiftState]=useState({shift:null,allowed:false,error:''});
+  const [taxiActive,setTaxiActive]=useState(false);
+  const taxiBlocked=Boolean(shiftState.shift)&&taxiActive;
   const [messagesOpen,setMessagesOpen]=useState(false);
   const offline=useDriverOffline(user,data,shiftApi,offlineSend);
   const shownData=offline.enabled?{...data,trips:offline.trips,loading:data.loading&&offline.online}:data;
@@ -128,7 +132,7 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
   },[permission,data.trips]);
 
   async function changeStatus(status){
-    if(!active||!shiftState.allowed)return;
+    if(!active||!shiftState.allowed||taxiBlocked)return;
     setBusy(true);setError('');
     const result=offline.enabled?await offline.status(active,status,shiftState.shift):await statusApi(active.id,status);
     setBusy(false);
@@ -138,8 +142,8 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
 
   return <div className="driver-app">
     <header className="driver-topbar">
-      <img src={APP_CONFIG.logoUrl} alt={APP_CONFIG.name}/>
-      <div className="driver-online"><span className="online-dot"/> {shiftState.shift?shiftState.shift.state==='paused'?'Pause':active?'Schicht · im Einsatz':'Schicht · verfügbar':'Keine Schicht'}</div>
+      <strong className="driver-brand">{APP_CONFIG.name}</strong>
+      <div className="driver-online"><span className="online-dot"/> {shiftState.shift?shiftState.shift.state==='paused'?'Pause':taxiActive?'Schicht · Einsteigerstatus prüfen / besetzt':active?'Schicht · im Einsatz':'Schicht · verfügbar':'Keine Schicht'}</div>
       <div className="driver-select">
         <div className="driver-identity"><strong>{user.name}</strong><span>Fahrer</span></div>
         <button className="secondary-button" onClick={()=>{if(offline.queue.length){setError('Noch nicht übertragene Fahrtmeldungen vorhanden. Zuerst übertragen oder mit dem Büro klären.');return}onLogout()}}><LogOut size={17}/> Konto abmelden</button>
@@ -147,10 +151,12 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
     </header>
 
     <main className="driver-content">
-      <DriverShiftPanel api={offline.api} onState={setShiftState} changeBlocked={offline.enabled&&(!offline.online||offline.queue.length>0)}/>
+      <DispatchRadio user={user}/>
+      <DriverShiftPanel api={offline.api} onState={setShiftState} changeBlocked={taxiBlocked||(offline.enabled&&(!offline.online||offline.queue.length>0))}/>
       {offline.enabled&&<DriverOfflinePanel offline={offline} blocked={offlineBlocked}/>}
       <button className="secondary-button" aria-expanded={messagesOpen} onClick={()=>setMessagesOpen(v=>!v)}>{messagesOpen?'Nachrichten schließen':'Nachrichten mit dem Büro'}</button>
       {messagesOpen&&<Messages api={messagesApi}/>}
+      {shiftState.shift&&user.businessUnitId&&<TaxiLiveRide api={taxiApi} user={user} shiftId={shiftState.shift.id} online={offline.online} disabled={!shiftState.allowed||Boolean(active&&active.status!==TRIP_STATUS.PLANNED)||offlineBlocked||busy||offline.syncing||!offline.online} onActiveChange={setTaxiActive} vehicle={shiftState.shift.vehicle_registration}/> }
       {shiftState.shift&&<><div className="driver-page-heading">
         <div><p className="eyebrow">FAHRER WEB APP</p><h1>Meine Aufträge</h1><p>Zugewiesene Fahrten erscheinen automatisch und werden live mit dem Büro synchronisiert.</p></div>
         <div className="driver-count">{visibleTrips.length}<span>offene Aufträge</span></div>
@@ -196,7 +202,7 @@ export default function DriverPortal({data,user,onLogout,shiftApi,messagesApi,of
               {actions.map(([status,label,Icon])=>{
                 const targetIndex=DRIVER_WORKFLOW.indexOf(status);
                 const enabled=targetIndex===progressIndex+1&&(!active.vehicleId||active.vehicleId===shiftState.shift?.vehicle_id);
-                return <button key={status} disabled={!enabled||busy||!shiftState.allowed||offlineBlocked||offline.syncing} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
+                return <button key={status} disabled={!enabled||busy||taxiBlocked||!shiftState.allowed||offlineBlocked||offline.syncing} className={'driver-action action-'+status} onClick={()=>changeStatus(status)}><Icon/><span>{busy&&enabled?'Wird gesendet …':label}</span></button>;
               })}
             </div>
 

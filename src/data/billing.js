@@ -18,7 +18,7 @@ export async function loadBilling(){
   const insurerIds=[...new Set(rows.map(x=>x.insurer_id).filter(Boolean))];
   const [trips,customers,insurers,contracts]=await Promise.all([
     readByIds(tripIds,ids=>supabase.from('trips').select('*',{count:'exact'}).eq('business_unit_id',u.id).in('id',ids).order('id')),
-    readByIds(customerIds,ids=>supabase.from('customers').select('id,first_name,last_name',{count:'exact'}).in('id',ids).order('id')),
+    readByIds(customerIds,ids=>supabase.from('customers').select('id,first_name,last_name,private_billing_cycle',{count:'exact'}).in('id',ids).order('id')),
     readByIds(insurerIds,ids=>supabase.from('health_insurers').select('id,name,short_name,ik_number,active',{count:'exact'}).in('id',ids).order('id')),
     readPages(()=>supabase.from('payer_contracts').select('*',{count:'exact'}).eq('business_unit_id',u.id).order('id'))
   ]);
@@ -38,3 +38,8 @@ export const createOwnShareReceipt=(item,context,paymentMethod='cash')=>invoke({
 
 export const createOwnShareInvoice=(item,context,dueDate)=>invoke({action:'own_share_invoice',caseId:item.id,dueDate});
 export const createMonthlyOwnShareInvoice=(customerId,month,cases,dueDate)=>invoke({action:'monthly_own_share_invoice',customerId,month,entries:cases.map(c=>({id:c.id,updatedAt:c.updated_at})),dueDate});
+
+export const createMonthlyPrivateInvoice=(customerId,month,group)=>invoke({
+ action:'monthly_private_invoice',customerId,month,kind:group.kind,original:group.original,
+ entries:group.rows.map(({billing})=>({id:billing.id,updatedAt:billing.updated_at}))
+});

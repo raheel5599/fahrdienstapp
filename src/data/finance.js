@@ -22,7 +22,7 @@ export const createReceipt=input=>invoke({action:'create_receipt',...input});
 export const cancelReceipt=receiptId=>invoke({action:'cancel_receipt',receiptId});
 
 export async function loadCompanyProfile(){const u=await unit();const {data,error}=await supabase.from("billing_profiles").select("*").eq("business_unit_id",u.id).maybeSingle();if(error)throw error;return data||{};}
-export const saveCompanyProfile=profile=>invoke({action:"save_company_profile",profile});
+export const saveCompanyProfile=(profile,kind="medical")=>invoke({action:"save_company_profile",profile,kind});
 
 export const cancelInvoice=(invoiceId,reason)=>invoke({action:"cancel_invoice",invoiceId,reason});
 export const replaceInvoice=(invoiceId,input)=>invoke({action:"replace_invoice",invoiceId,...input});
@@ -38,3 +38,14 @@ export const cancelPatientPayment=(paymentId,reason)=>invoke({action:"cancel_pat
 
 export async function loadPatientReminderSettings(){const r=await invoke({action:"patient_reminder_config"});if(!r.ok)throw Error(r.message);return r.data;}
 export const savePatientReminderSettings=input=>invoke({action:"save_patient_reminder_settings",...input});
+
+export async function invoicePost(action,invoiceId,details={}){
+ const {data,error}=await supabase.functions.invoke('send-epost',{body:{action,invoiceId,...details}});
+ if(error){
+  let message;
+  try{message=(await error.context.json()).error;}catch{}
+  throw Error(message||'E-POST-Anfrage konnte nicht bestätigt werden.');
+ }
+ if(data?.error)throw Error(data.error);
+ return data;
+}
