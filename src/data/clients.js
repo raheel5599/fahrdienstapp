@@ -29,6 +29,8 @@ export async function loadClients(){
   return (clients.data||[]).map(c=>({
     id:c.id,
     customerNumber:c.customer_number,
+    customerType:c.customer_type??'person',
+    companyName:c.customer_type==='company'?c.last_name:'',
     firstName:c.first_name,
     lastName:c.last_name,
     fullName:[c.first_name,c.last_name].filter(Boolean).join(' '),
@@ -53,7 +55,11 @@ export async function loadClients(){
 
 async function invoke(body){
   const {data,error}=await supabase.functions.invoke('manage-customers',{body:{...body,businessUnitCode:APP_CONFIG.businessUnitCode}});
-  if(error) return {ok:false,message:error.message||'Speichern fehlgeschlagen.'};
+  if(error){
+    let message=error.message;
+    try{message=(await error.context.json()).error||message;}catch{}
+    return {ok:false,message:message||'Speichern fehlgeschlagen.'};
+  }
   if(data?.error) return {ok:false,message:data.error};
   return {ok:true,data};
 }

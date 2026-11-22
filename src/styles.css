@@ -574,3 +574,9 @@ html.installed-app .topbar .logout-button{background:#1b1e22;border-color:#353a4
  .document-preview-toolbar .document-preview-post-toggle{order:3;width:100%}
  .document-preview-post{padding:10px 12px}
 }
+
+.invoice-toolbar-actions{display:flex;flex-wrap:wrap;gap:8px}
+.invoice-customer-field{min-width:0}
+.finance-modal .form-grid input[type="date"],
+.client-editor .form-grid input[type="date"]{box-sizing:border-box;min-width:0;width:100%}
+.client-editor .module-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
