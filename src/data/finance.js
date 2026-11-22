@@ -39,5 +39,13 @@ export const cancelPatientPayment=(paymentId,reason)=>invoke({action:"cancel_pat
 export async function loadPatientReminderSettings(){const r=await invoke({action:"patient_reminder_config"});if(!r.ok)throw Error(r.message);return r.data;}
 export const savePatientReminderSettings=input=>invoke({action:"save_patient_reminder_settings",...input});
 
-export const loadEpostTestStatus=()=>invoke({action:"epost_test_status"});
-export const sendEpostTest=()=>invoke({action:"epost_test_upload"});
+export async function invoicePost(action,invoiceId,details={}){
+ const {data,error}=await supabase.functions.invoke('send-epost',{body:{action,invoiceId,...details}});
+ if(error){
+  let message;
+  try{message=(await error.context.json()).error;}catch{}
+  throw Error(message||'E-POST-Anfrage konnte nicht bestätigt werden.');
+ }
+ if(data?.error)throw Error(data.error);
+ return data;
+}
