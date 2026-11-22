@@ -29,6 +29,7 @@ export async function loadClients(){
   return (clients.data||[]).map(c=>({
     id:c.id,
     customerNumber:c.customer_number,
+    privateBillingCycle:c.private_billing_cycle??'single',
     customerType:c.customer_type??'person',
     companyName:c.customer_type==='company'?c.last_name:'',
     firstName:c.first_name,

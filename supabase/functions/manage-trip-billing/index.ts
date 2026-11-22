@@ -37,6 +37,21 @@ Deno.serve(async(req)=>{
  if(!unit)return out(400,{error:"Geschäftsbereich fehlt."});
  const {data:m}=await db.from("memberships").select("role").eq("user_id",user.id).eq("business_unit_id",unit.id).eq("active",true).maybeSingle();
  if(!m||!["admin","office"].includes(m.role))return out(403,{error:"Keine Berechtigung."});
+ if(body.action==="monthly_private_invoice"){
+   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month||""))||!body.customerId||
+      !["taxi","medical"].includes(body.kind)||!Array.isArray(body.entries)||!body.entries.length||
+      body.entries.some(entry=>!entry?.id||!entry.updatedAt)||new Set(body.entries.map(entry=>entry.id)).size!==body.entries.length){
+     return out(400,{error:"Kunde, Leistungsmonat und Fahrten prüfen."});
+   }
+   try{
+     const issuer=await loadIssuerSnapshot(db,unit.id,{kind:body.kind,unitCode:body.businessUnitCode});
+     const {data,error}=await db.rpc("issue_monthly_private_invoice",{
+       p_unit:unit.id,p_actor:user.id,p_customer:body.customerId,p_month:body.month+"-01",p_kind:body.kind,
+       p_original:body.original||null,p_entries:Object.fromEntries(body.entries.map(entry=>[entry.id,entry.updatedAt])),p_issuer:issuer
+     });
+     return error?out(409,{error:error.message}):out(200,data);
+   }catch(error){return out(409,{error:error.message});}
+ }
  if(body.action==="monthly_own_share_invoice"){
    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month||""))||!body.customerId||!Array.isArray(body.entries)||body.entries.length<1||body.entries.length>100||new Set(body.entries.map(e=>e?.id)).size!==body.entries.length)return out(400,{error:"Patient, Monat und 1 bis 100 verschiedene Eigenanteile auswählen."});
    try{
@@ -69,7 +84,9 @@ Deno.serve(async(req)=>{
    if(payer==="private"){
      let fare;try{fare=privateFare({amount:body.privateAmount??c.private_amount??trip.private_price,vatRate:body.privateVatRate??c.private_vat_rate??trip.private_vat_rate})}catch(e){return out(400,{error:e.message})}
      if(c.receipt_id||c.own_share_paid)return out(409,{error:"Bestehende Eigenanteilquittung zuerst klären."});
-     const patch={payer_type:"private",private_amount:fare.gross,private_vat_rate:fare.vatRate,gross_amount:fare.gross,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",direction_count:1,insurance_id:null,insurer_id:null,contract_id:null,position_code:null,billing_position:null,tariff_breakdown:[],billing_status:"ready",review_message:"",calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+     const cycle=body.privateBillingCycle===undefined?c.private_billing_cycle:body.privateBillingCycle||null;
+     if(cycle!=null&&!["single","monthly"].includes(cycle))return out(400,{error:"Abrechnungsrhythmus ist ungültig."});
+     const patch={private_billing_cycle:cycle,payer_type:"private",private_amount:fare.gross,private_vat_rate:fare.vatRate,gross_amount:fare.gross,own_share_amount:0,insurer_amount:0,own_share_required:false,copay_rule_version:COPAY_RULE_VERSION,copay_note:"Privatfahrt: Kunde zahlt den gesamten Fahrtbetrag.",direction_count:1,insurance_id:null,insurer_id:null,contract_id:null,position_code:null,billing_position:null,tariff_breakdown:[],billing_status:"ready",review_message:"",calculated_at:new Date().toISOString(),updated_at:new Date().toISOString()};
      let query=db.from("trip_billing_cases").update(patch).eq("id",c.id).eq("business_unit_id",unit.id).is("invoice_id",null);if(c.updated_at)query=query.eq("updated_at",c.updated_at);const {data,error}=await query.select("*").maybeSingle();return error||!data?out(409,{error:error?.message||"Fall wurde geändert. Neu laden."}):out(200,{ok:true,case:data});
    }
    let insurance:any=null;

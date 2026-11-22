@@ -44,7 +44,10 @@ Deno.serve(async(req:Request)=>{
     const firstName=company?"":txt(body.firstName);
     const lastName=company?txt(body.companyName):txt(body.lastName);
     if(!lastName||(!company&&!firstName)) return out(400,{error:company?"Firmenname ist erforderlich.":"Vorname und Nachname sind erforderlich."});
+    const billingCycle=body.privateBillingCycle;
+    if(billingCycle!==undefined&&!["single","monthly"].includes(billingCycle))return out(400,{error:"Abrechnungsrhythmus ist ungültig."});
     const fields={
+      ...(billingCycle===undefined?{}:{private_billing_cycle:billingCycle}),
       customer_type:type,first_name:firstName,last_name:lastName,birth_date:company?null:txt(body.birthDate),
       phone:txt(body.phone),email:txt(body.email),street:txt(body.street),postal_code:txt(body.postalCode),city:txt(body.city),
       address_extra:txt(body.addressExtra),is_regular:!!body.isRegular,mobility:company?"other":String(body.mobility||"walking"),

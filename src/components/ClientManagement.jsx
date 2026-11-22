@@ -131,6 +131,7 @@ function Overview({client}){
       <Summary icon={CalendarDays} label="Stammkunde" value={client.isRegular?'Ja':'Nein'}/>
     </div>
     <div className="client-info-grid">
+      <Info label="Privatabrechnung" value={client.privateBillingCycle==='monthly'?'Monatlich':'Einzeln'}/>
       <Info label="Telefon" value={client.phone||'—'}/>
       <Info label="E-Mail" value={client.email||'—'}/>
       {!company&&<Info label="Geburtsdatum" value={client.birthDate?new Date(client.birthDate).toLocaleDateString('de-DE'):'—'}/>}

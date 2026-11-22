@@ -5,6 +5,7 @@ import {createClient,updateClient} from '../data/clients.js';
 
 export default function ClientEditor({client,onClose,onSaved}){
   const [form,setForm]=useState({
+    privateBillingCycle:client?.privateBillingCycle??'single',
     customerType:client?.customerType??'person',
     companyName:client?.companyName||'',
     firstName:client?.firstName||'',
@@ -68,6 +69,16 @@ export default function ClientEditor({client,onClose,onSaved}){
         </>}
         <label><span>Telefon</span><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></label>
         <label className="wide"><span>E-Mail</span><input type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></label>
+      </div>
+
+      <div className="form-section-title">Privatabrechnung</div>
+      <div className="form-grid">
+        <label className="wide"><span>Abrechnungsrhythmus</span>
+          <select value={form.privateBillingCycle} onChange={e=>set('privateBillingCycle',e.target.value)}>
+            <option value="single">Einzeln abrechnen</option>
+            <option value="monthly">Monatlich sammeln</option>
+          </select>
+        </label>
       </div>
 
       <div className="form-section-title">Adresse</div>
