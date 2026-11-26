@@ -77,3 +77,21 @@ Grundlagen: beigefügte TA1 V21 (15.01.2026), TA1 V22 (21.05.2026), TA3 V21/V22,
 Anhang 1, Anhang 2 und Anhang 3. Die vorhandenen Python-Dateien wurden nicht als
 Browser-/Supabase-Laufzeit eingeführt; die Prüf- und Serialisierungsregeln liegen im
 geteilten JavaScript-Modul `_shared/dta302.js`.
+
+## Vorbereitung der KKS-Auftragsdatei
+
+`supabase/functions/_shared/kksAuf.js` erzeugt den 348-Byte-Auftragssatz nach
+[GGT Anlage 2](https://www.gkv-datenaustausch.de/media/dokumente/standards_und_normen/technische_spezifikationen/Anlage_2_-_Auftragsdatei.pdf)
+für unkomprimierte §302-Testlieferungen ohne Teillieferungen. Die Anwendungsreferenz
+und die beteiligten IKs stammen aus dem vorhandenen UNB bzw. der bestätigten Route.
+Die Bytegrößen werden an der ursprünglichen Nutzdatei und am fertigen Transportinhalt
+gemessen. Die Auftragsdatei und die Transportdatei erhalten denselben Stammnamen.
+
+Der Generator ist noch nicht an den Download oder an einen Versand angebunden.
+Vor Integration muss der Signatur-/Verschlüsselungsschritt den Transportinhalt aus
+genau derselben Nutzdatei erzeugen und dessen Empfängerzertifikat prüfen. Die
+Prüfung der äußeren PKCS#7-Kennung ersetzt keine kryptografische Prüfung. Die
+Versandschicht ist für separat reservierte Transfernummern, eindeutige
+Erstellungszeitpunkte und Wiederverwendung des identischen Dateipaars bei
+Wiederholungen verantwortlich. Der vorhandene ZIP-Dateiname ist keine Reservierung
+einer KKS-Transfernummer.
