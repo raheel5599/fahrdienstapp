@@ -1,3 +1,4 @@
+import {downloadKksSample} from '../data/kksSample.js';
 import {aokPresetFor} from '../../supabase/functions/_shared/aokContracts.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {CheckCircle2,Download,FileWarning,RefreshCw,Save,ShieldCheck,X} from 'lucide-react';
@@ -39,6 +40,11 @@ export default function Kassenabrechnung({insurers=[],contracts=[],api=dta302Api
   <p>Vorhandene Kassenrechnungen prüfen und als elektronische Abrechnungsdateien vorbereiten. Rechnungsnummern, Tarifpositionen und Eigenanteile werden übernommen.</p>
   <div className="dta-stage-grid" aria-label="Stand des Datenaustauschs"><div><CheckCircle2/><b>Bestehende Abrechnung</b><small>Keine zweite Rechnung</small></div><div><FileWarning/><b>Testdateien vorbereiten</b><small>Pflichtangaben je Fahrt prüfen</small></div><div className="dta-pending"><ShieldCheck/><b>Echtversand ausstehend</b><small>Zertifikat · Auftragsdatei · Annahmestellentest</small></div></div>
   <p className="billing-review-note">Aktuell Testbetrieb: Downloads sind unverschlüsselte Nutzdaten mit Testindikator 0 und lösen keine Zahlung aus. Verschlüsselung, Auftragsdatei und der tatsächliche Versand sind noch nicht eingerichtet. Die Belegprüfung bleibt im vorhandenen Reiter.</p>
+  <details className="dta-setup">
+   <summary>Auftragsdatei lokal prüfen</summary>
+   <p>Das Muster zeigt den Aufbau einer .AUF-Datei mit fiktiven Daten. Es dient der Formatprüfung und darf nicht eingereicht werden.</p>
+   <button type="button" className="secondary-button" onClick={downloadKksSample}><Download size={17}/>AUF-Muster herunterladen</button>
+  </details>
   <label className="dta-insurer"><span>Krankenkasse für Datenaustausch</span><select value={insurerId} disabled={busy} onChange={e=>{setNotice('');setTarget(null);setInsurerId(e.target.value)}}><option value="">Krankenkasse auswählen</option>{insurers.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></label>
   {notice&&<p role="status" className="billing-review-note">{notice}</p>}{error&&!target&&<p className="users-error" role="alert">{error}</p>}
   {busy&&<p role="status">Kassenabrechnung wird geprüft …</p>}
